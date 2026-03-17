@@ -309,19 +309,17 @@ export function VerticalSection({
         </div>
 
         {/* Total traffic stats */}
-        {totalVisitors > 0 && (
-          <div className="flex items-center gap-3 text-xs mr-4 flex-shrink-0">
-            <span className="text-zinc-300 font-medium tabular-nums">
-              {formatNum(totalVisitors)}
-              <span className="text-zinc-600 font-normal ml-1">{labels.visitors}</span>
-            </span>
-            <span className="text-zinc-700">{'\u00B7'}</span>
-            <span className="text-zinc-300 font-medium tabular-nums">
-              {formatPct(overallConvRate)}
-              <span className="text-zinc-600 font-normal ml-1">{labels.convRate}</span>
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-3 text-xs mr-4 flex-shrink-0">
+          <span className="text-zinc-300 font-medium tabular-nums">
+            {formatNum(totalVisitors)}
+            <span className="text-zinc-600 font-normal ml-1">{labels.visitors}</span>
+          </span>
+          <span className="text-zinc-700">{'\u00B7'}</span>
+          <span className="text-zinc-300 font-medium tabular-nums">
+            {formatPct(overallConvRate)}
+            <span className="text-zinc-600 font-normal ml-1">{labels.convRate}</span>
+          </span>
+        </div>
 
         <div className="flex items-center gap-2">
           {/* Editable strategy badge */}
