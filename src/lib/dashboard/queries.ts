@@ -379,34 +379,43 @@ export async function getVerticalMetrics(
             metric: 'uniques',
             filters: [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: pathValues }],
           }),
+          // End event (conversions) queried WITHOUT path filter — conversion events
+          // like "Credits Purchased" fire globally, not on a specific page path.
+          // Total conversions are split evenly across variants for now.
           queryEventTotals({
             event: endEvent,
             start,
             end,
-            groupBy: 'ep:path',
-            filters: [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: pathValues }],
           }),
         ]);
 
         const viewsByPath = viewsResult.byGroup ?? {};
-        const clicksByPath = clicksResult.byGroup ?? {};
+        const totalConversions = clicksResult.total ?? 0;
 
-        console.log(`[getVerticalMetrics] Vertical ${vertical.name}: paths=${JSON.stringify(pathValues)}, viewsByPath=${JSON.stringify(viewsByPath)}, viewsTotal=${viewsResult.total}`);
-
-        // Map path results back to variant IDs
+        // Map path results back to variant IDs (visitors)
         for (const [path, variantId] of Object.entries(pathToVariantId)) {
           viewsByVariant[variantId] = (viewsByVariant[variantId] ?? 0) + (viewsByPath[path] ?? 0);
-          clicksByVariant[variantId] = (clicksByVariant[variantId] ?? 0) + (clicksByPath[path] ?? 0);
         }
 
-        // Source page traffic that isn't attributed to any variant — add to a special key
-        // so the vertical header total includes it
+        // Distribute conversions proportionally by visitor share
+        // (since conversion events don't have path data)
+        const totalPathVisitors = Object.values(viewsByPath).reduce((s, v) => s + v, 0);
+        if (totalConversions > 0 && totalPathVisitors > 0) {
+          for (const [path, variantId] of Object.entries(pathToVariantId)) {
+            const pathVisitors = viewsByPath[path] ?? 0;
+            const share = pathVisitors / totalPathVisitors;
+            clicksByVariant[variantId] = (clicksByVariant[variantId] ?? 0) + Math.round(totalConversions * share);
+          }
+        }
+
+        // Source page traffic that isn't attributed to any variant
         if (sourcePagePath && !pathToVariantId[sourcePagePath]) {
           const sourceViews = viewsByPath[sourcePagePath] ?? 0;
-          const sourceClicks = clicksByPath[sourcePagePath] ?? 0;
           if (sourceViews > 0) {
             viewsByVariant['__source__'] = sourceViews;
-            clicksByVariant['__source__'] = sourceClicks;
+            if (totalConversions > 0 && totalPathVisitors > 0) {
+              clicksByVariant['__source__'] = Math.round(totalConversions * (sourceViews / totalPathVisitors));
+            }
           }
         }
       }
@@ -537,7 +546,8 @@ export async function getVariantTimeSeries(
       }
       viewsEvent = 'Viewed';
       viewsFilters = [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: [urlPath] }];
-      clicksFilters = [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: [urlPath] }];
+      // Conversion events (Credits Purchased, etc.) don't have path — query without filter
+      clicksFilters = [];
     } else {
       // Template variant: query by variant_id
       viewsEvent = (await getTrackedEvents(vertical.project_id))[0];

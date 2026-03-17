@@ -812,17 +812,36 @@ const EMPTY_SUGGESTIONS = [
 function HistoryPanel({
   chats,
   onRestore,
+  onRename,
+  onDelete,
+  onClearAll,
   onClose,
 }: {
   chats: SavedChat[];
   onRestore: (chat: SavedChat) => void;
+  onRename: (chatId: string, newTitle: string) => void;
+  onDelete: (chatId: string) => void;
+  onClearAll: () => void;
   onClose: () => void;
 }) {
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
   return (
     <div className="absolute right-0 top-full mt-1 z-30 w-72 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden">
       <div className="px-3 py-2.5 border-b border-white/5 flex items-center justify-between">
         <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Recent chats</p>
-        <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 text-sm leading-none">×</button>
+        <div className="flex items-center gap-2">
+          {chats.length > 0 && (
+            <button
+              onClick={() => { if (confirm('Clear all chat history?')) onClearAll(); }}
+              className="text-[10px] text-zinc-600 hover:text-red-400 transition-colors"
+            >
+              Clear all
+            </button>
+          )}
+          <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 text-sm leading-none">{'\u00D7'}</button>
+        </div>
       </div>
       {chats.length === 0 ? (
         <div className="px-4 py-6 text-center">
@@ -831,16 +850,54 @@ function HistoryPanel({
       ) : (
         <div className="max-h-64 overflow-y-auto">
           {chats.map((chat) => (
-            <button
+            <div
               key={chat.id}
-              onClick={() => onRestore(chat)}
-              className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0"
+              className="flex items-center gap-1 px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 group"
             >
-              <p className="text-xs text-zinc-200 truncate">{chat.title}</p>
-              <p className="text-[10px] text-zinc-600 mt-0.5">
-                {new Date(chat.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </button>
+              {renamingId === chat.id ? (
+                <div className="flex-1 flex items-center gap-1">
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { onRename(chat.id, renameValue); setRenamingId(null); }
+                      if (e.key === 'Escape') setRenamingId(null);
+                    }}
+                    className="flex-1 bg-zinc-800 border border-white/20 rounded px-2 py-1 text-xs text-white focus:outline-none"
+                  />
+                  <button onClick={() => { onRename(chat.id, renameValue); setRenamingId(null); }} className="text-[10px] text-green-400">Save</button>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => onRestore(chat)}
+                    className="flex-1 text-left min-w-0"
+                  >
+                    <p className="text-xs text-zinc-200 truncate">{chat.title}</p>
+                    <p className="text-[10px] text-zinc-600 mt-0.5">
+                      {new Date(chat.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </button>
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setRenamingId(chat.id); setRenameValue(chat.title); }}
+                      className="text-zinc-700 hover:text-zinc-400 text-[10px] px-1 transition-colors"
+                      title="Rename"
+                    >
+                      {'\u270E'}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onDelete(chat.id); }}
+                      className="text-zinc-700 hover:text-red-400 text-[10px] px-1 transition-colors"
+                      title="Delete"
+                    >
+                      {'\u2715'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -1339,6 +1396,24 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
               <HistoryPanel
                 chats={savedChats}
                 onRestore={restoreChat}
+                onRename={(chatId, newTitle) => {
+                  setSavedChats((prev) => {
+                    const updated = prev.map((c) => c.id === chatId ? { ...c, title: newTitle } : c);
+                    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch { /* */ }
+                    return updated;
+                  });
+                }}
+                onDelete={(chatId) => {
+                  setSavedChats((prev) => {
+                    const updated = prev.filter((c) => c.id !== chatId);
+                    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch { /* */ }
+                    return updated;
+                  });
+                }}
+                onClearAll={() => {
+                  setSavedChats([]);
+                  try { localStorage.removeItem(HISTORY_KEY); } catch { /* */ }
+                }}
                 onClose={() => setHistoryOpen(false)}
               />
             )}

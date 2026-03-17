@@ -614,6 +614,26 @@ export function VerticalSection({
                   )}
                 </div>
 
+                {/* Delete button for killed variants */}
+                {isKilled && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Remove this variant permanently?')) return;
+                      setLoading(variant.id);
+                      try {
+                        const res = await fetch(`/api/variants/${variant.id}`, { method: 'DELETE' });
+                        if (res.ok) router.refresh();
+                      } finally {
+                        setLoading(null);
+                      }
+                    }}
+                    disabled={loading === variant.id}
+                    className="text-xs text-zinc-600 hover:text-red-400 transition-colors px-1.5 py-0.5 flex-shrink-0"
+                  >
+                    {loading === variant.id ? '...' : 'Remove'}
+                  </button>
+                )}
+
                 {/* ⋯ per-variant menu */}
                 {!isKilled && (
                   <div className="relative flex-shrink-0">

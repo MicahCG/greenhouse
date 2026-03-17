@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
-import { variants, variant_versions } from '@/lib/db/schema';
+import { variants, variant_versions, agent_changes } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { VariantConfigSchema } from '@/lib/types/variant-config';
@@ -148,13 +148,16 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const [updated] = await db
-    .update(variants)
-    .set({ status: 'killed', updated_at: new Date() })
+  // Hard delete — clean up dependent records first
+  await db.delete(variant_versions).where(eq(variant_versions.variant_id, id));
+  await db.delete(agent_changes).where(eq(agent_changes.variant_id, id));
+
+  const [deleted] = await db
+    .delete(variants)
     .where(eq(variants.id, id))
     .returning();
 
-  if (!updated) return Response.json({ error: 'Not found' }, { status: 404 });
+  if (!deleted) return Response.json({ error: 'Not found' }, { status: 404 });
 
   return Response.json({ success: true });
 }
