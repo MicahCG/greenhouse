@@ -25,7 +25,7 @@ export interface ChatMessage {
     config: Record<string, unknown>;
     changeId: string;
   };
-  codeChange?: {
+  codeChanges?: Array<{
     changeId: string;
     prNumber: number;
     prUrl: string;
@@ -33,7 +33,7 @@ export interface ChatMessage {
     repo: string;
     filePath: string;
     hypothesis: string;
-  };
+  }>;
   pagePreview?: {
     url: string;
     title: string;
@@ -483,7 +483,7 @@ function VariantCreatedCard({ data }: { data: ChatMessage['variantCreated'] }) {
 // CodeChangeCard
 // ---------------------------------------------------------------------------
 
-function CodeChangeCard({ data }: { data: ChatMessage['codeChange'] }) {
+function CodeChangeCard({ data }: { data: NonNullable<ChatMessage['codeChanges']>[number] | undefined }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -991,18 +991,19 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
                   hypothesis?: string;
                 };
                 if (parsed.pr_number) {
+                  const newCodeChange = {
+                    changeId: parsed.change_id ?? '',
+                    prNumber: parsed.pr_number!,
+                    prUrl: parsed.pr_url ?? '',
+                    branch: parsed.branch ?? '',
+                    repo: parsed.repo ?? 'popcorn',
+                    filePath: parsed.file_path ?? parsed.new_file ?? parsed.source_file ?? '',
+                    hypothesis: parsed.hypothesis ?? '',
+                  };
                   setMessages((prev) =>
                     updateLastMessage(prev, (msg) => ({
                       ...msg,
-                      codeChange: {
-                        changeId: parsed.change_id ?? '',
-                        prNumber: parsed.pr_number!,
-                        prUrl: parsed.pr_url ?? '',
-                        branch: parsed.branch ?? '',
-                        repo: parsed.repo ?? 'popcorn',
-                        filePath: parsed.file_path ?? parsed.new_file ?? parsed.source_file ?? '',
-                        hypothesis: parsed.hypothesis ?? '',
-                      },
+                      codeChanges: [...(msg.codeChanges ?? []), newCodeChange],
                       toolCalls: (msg.toolCalls ?? []).map((tc) =>
                         tc.tool === toolName && !tc.done
                           ? { ...tc, result, done: true }
@@ -1278,10 +1279,10 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
                     <VariantCreatedCard data={msg.variantCreated} />
                   )}
 
-                  {/* Code change card with Vercel preview */}
-                  {msg.codeChange && (
-                    <CodeChangeCard data={msg.codeChange} />
-                  )}
+                  {/* Code change cards with Vercel preview */}
+                  {msg.codeChanges && msg.codeChanges.map((cc, idx) => (
+                    <CodeChangeCard key={cc.changeId || idx} data={cc} />
+                  ))}
 
                   {/* Page preview card */}
                   {msg.pagePreview && (
