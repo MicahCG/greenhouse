@@ -345,13 +345,15 @@ export async function getVerticalMetrics(
       }
 
       if (paths.length > 0) {
-        // Query by page path instead of vertical_id
+        // For external variants: visitors = Page View by path, conversions = project's end event by path
+        // Always use 'Page View' for visitors since that's what Amplitude tracks for all pages
         const [viewsResult, clicksResult] = await Promise.all([
           queryEventTotals({
-            event: startEvent,
+            event: 'Page View',
             start,
             end,
             groupBy: 'ep:path',
+            metric: 'uniques',
             filters: [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: paths }],
           }),
           queryEventTotals({
