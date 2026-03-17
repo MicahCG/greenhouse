@@ -616,8 +616,16 @@ function CodeChangeCard({ data }: { data: NonNullable<ChatMessage['codeChanges']
 // PagePreviewCard — shows iframe of the fetched URL
 // ---------------------------------------------------------------------------
 
-function PagePreviewCard({ data }: { data: ChatMessage['pagePreview'] }) {
+function PagePreviewCard({ data, onRequestWireframe }: { data: ChatMessage['pagePreview']; onRequestWireframe?: (url: string) => void }) {
   const [iframeError, setIframeError] = useState(false);
+  const [showFallbackHint, setShowFallbackHint] = useState(false);
+
+  useEffect(() => {
+    // After 4 seconds, show a hint in case the iframe is broken but didn't trigger onError
+    // (e.g. cross-origin "Application error" pages that load as 200)
+    const timer = setTimeout(() => setShowFallbackHint(true), 4000);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (!data) return null;
 
@@ -628,14 +636,24 @@ function PagePreviewCard({ data }: { data: ChatMessage['pagePreview'] }) {
           <span className="text-sm leading-none">&#127760;</span>
           <span className="text-xs font-semibold text-zinc-300 truncate">{data.title || data.url}</span>
         </div>
-        <a
-          href={data.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-zinc-500 hover:text-white transition-colors flex-shrink-0"
-        >
-          Open &#8599;
-        </a>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {!iframeError && showFallbackHint && onRequestWireframe && (
+            <button
+              onClick={() => { setIframeError(true); onRequestWireframe(data.url); }}
+              className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              Preview broken?
+            </button>
+          )}
+          <a
+            href={data.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-zinc-500 hover:text-white transition-colors"
+          >
+            Open &#8599;
+          </a>
+        </div>
       </div>
 
       {/* Page content summary */}
@@ -658,11 +676,8 @@ function PagePreviewCard({ data }: { data: ChatMessage['pagePreview'] }) {
             sandbox="allow-scripts allow-same-origin allow-top-navigation-by-user-activation allow-popups"
             onError={() => setIframeError(true)}
             onLoad={(e) => {
-              // Some sites block iframe but don't fire onerror —
-              // we can't reliably detect this, so we show the iframe anyway
               try {
                 const iframe = e.target as HTMLIFrameElement;
-                // If we can't access contentDocument, it's likely blocked
                 if (!iframe.contentDocument && !iframe.contentWindow) {
                   setIframeError(true);
                 }
@@ -673,16 +688,26 @@ function PagePreviewCard({ data }: { data: ChatMessage['pagePreview'] }) {
           />
         </div>
       ) : (
-        <div className="px-4 py-6 text-center">
-          <p className="text-xs text-zinc-500 mb-2">This site blocks iframe previews</p>
-          <a
-            href={data.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg hover:bg-zinc-700 transition-colors"
-          >
-            Open in new tab &#8599;
-          </a>
+        <div className="px-4 py-6 text-center space-y-3">
+          <p className="text-xs text-zinc-500">This page can&apos;t be previewed in an iframe (requires login or blocks embedding)</p>
+          <div className="flex items-center justify-center gap-2">
+            <a
+              href={data.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg hover:bg-zinc-700 transition-colors"
+            >
+              Open in new tab &#8599;
+            </a>
+            {onRequestWireframe && (
+              <button
+                onClick={() => onRequestWireframe(data.url)}
+                className="text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-lg hover:bg-amber-500/30 transition-colors"
+              >
+                &#9638; Generate wireframe
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1331,7 +1356,9 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
             // Save conversation to localStorage
             const chatId = currentChatIdRef.current ?? `chat-${Date.now()}`;
             currentChatIdRef.current = chatId;
-            const title = newHistory[0]?.content?.slice(0, 60) ?? 'Conversation';
+            // Preserve user-renamed title if it exists, otherwise auto-generate
+            const existingChat = loadHistory().find((c) => c.id === chatId);
+            const title = existingChat?.title ?? newHistory[0]?.content?.slice(0, 60) ?? 'Conversation';
             const historyMessages: ChatMessage[] = finalHistory.map((m) => ({
               role: m.role,
               content: m.content,
@@ -1619,7 +1646,10 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
 
                   {/* Page preview card */}
                   {msg.pagePreview && (
-                    <PagePreviewCard data={msg.pagePreview} />
+                    <PagePreviewCard
+                      data={msg.pagePreview}
+                      onRequestWireframe={(url) => sendMessage(`Generate an ASCII wireframe preview of ${url}`)}
+                    />
                   )}
 
                   {/* Wireframe preview card */}
