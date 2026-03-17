@@ -178,11 +178,19 @@ export async function queryEventTotals(params: {
     const eventFilters = (params.filters ?? []).filter((f) => f.subprop_type === 'event');
     const userFilters = (params.filters ?? []).filter((f) => f.subprop_type === 'user');
 
-    const eventObj: { event_type: string; filters?: AmplitudeFilter[] } = {
+    const eventObj: {
+      event_type: string;
+      filters?: AmplitudeFilter[];
+      group_by?: Array<{ type: string; value: string }>;
+    } = {
       event_type: params.event,
     };
     if (eventFilters.length > 0) {
       eventObj.filters = eventFilters;
+    }
+    // Event property groupBy goes INSIDE the event JSON as group_by
+    if (params.groupBy?.startsWith('ep:')) {
+      eventObj.group_by = [{ type: 'event', value: params.groupBy.slice(3) }];
     }
 
     const queryParams: Record<string, string> = {
@@ -202,7 +210,8 @@ export async function queryEventTotals(params: {
       })));
     }
 
-    if (params.groupBy) {
+    // User property groupBy goes as the `g` URL parameter
+    if (params.groupBy && !params.groupBy.startsWith('ep:')) {
       queryParams.g = params.groupBy;
     }
 

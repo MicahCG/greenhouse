@@ -329,39 +329,41 @@ export async function getVerticalMetrics(
 
     if (hasExternalVariants) {
       // Build a map of URL paths → variant IDs for external variants
+      // Build map of URL paths → variant IDs
+      // The 'Viewed' event uses 'path' property WITH leading slash (e.g. "/credits")
       const pathToVariantId: Record<string, string> = {};
-      const paths: string[] = [];
+      const pathValues: string[] = [];
       for (const v of allVariants) {
         if (v.external_url) {
-          let path: string;
+          let urlPath: string;
           try {
-            path = new URL(v.external_url).pathname;
+            urlPath = new URL(v.external_url).pathname;
           } catch {
-            path = v.external_url.startsWith('/') ? v.external_url : `/${v.external_url}`;
+            urlPath = v.external_url.startsWith('/') ? v.external_url : `/${v.external_url}`;
           }
-          pathToVariantId[path] = v.id;
-          paths.push(path);
+          pathToVariantId[urlPath] = v.id;
+          pathValues.push(urlPath);
         }
       }
 
-      if (paths.length > 0) {
-        // For external variants: visitors = Page View by path, conversions = project's end event by path
-        // Always use 'Page View' for visitors since that's what Amplitude tracks for all pages
+      if (pathValues.length > 0) {
+        // Query 'Viewed' event (Popcorn's page view tracker) grouped by 'path' event property
+        // This matches what Amplitude Web Analytics shows
         const [viewsResult, clicksResult] = await Promise.all([
           queryEventTotals({
-            event: 'Page View',
+            event: 'Viewed',
             start,
             end,
             groupBy: 'ep:path',
             metric: 'uniques',
-            filters: [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: paths }],
+            filters: [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: pathValues }],
           }),
           queryEventTotals({
             event: endEvent,
             start,
             end,
             groupBy: 'ep:path',
-            filters: [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: paths }],
+            filters: [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: pathValues }],
           }),
         ]);
 
