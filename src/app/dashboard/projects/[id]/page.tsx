@@ -57,7 +57,14 @@ async function getData(projectId: string) {
           },
         ])
       );
-      return { ...vertical, variants: allVariants, metricsMap, controlSlug: metricsResult.controlSlug };
+      return {
+        ...vertical,
+        variants: allVariants,
+        metricsMap,
+        controlSlug: metricsResult.controlSlug,
+        sourcePageVisitors: metricsResult.sourcePageVisitors ?? 0,
+        sourcePageConversions: metricsResult.sourcePageConversions ?? 0,
+      };
     })
   );
 
@@ -119,6 +126,8 @@ export default async function ProjectPage({ params }: PageProps) {
               metricsMap={vertical.metricsMap}
               controlSlug={vertical.controlSlug}
               funnelFocus={project.funnel_focus}
+              sourcePageVisitors={vertical.sourcePageVisitors}
+              sourcePageConversions={vertical.sourcePageConversions}
             />
           ))}
         </div>

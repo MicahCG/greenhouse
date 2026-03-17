@@ -74,6 +74,8 @@ export interface VerticalMetricsResult {
   };
   variants: VariantMetrics[];
   controlSlug: string;
+  sourcePageVisitors?: number;
+  sourcePageConversions?: number;
 }
 
 export interface TimeSeriesPoint {
@@ -333,16 +335,20 @@ export async function getVerticalMetrics(
       const pathToVariantId: Record<string, string> = {};
       const pathValues: string[] = [];
 
-      // Include the vertical's source_url as a path to query
-      // (it represents the baseline/control page even if no variant explicitly points to it)
+      // Track the source page path separately — its traffic goes to the vertical total
+      // but NOT attributed to any specific variant (unless a variant explicitly points to it)
+      let sourcePagePath: string | null = null;
       if (vertical.source_url) {
         try {
-          const sourcePath = new URL(vertical.source_url).pathname;
-          if (!pathValues.includes(sourcePath)) {
-            pathValues.push(sourcePath);
-            // Map source path to the first variant (control) for display purposes
-            const controlVariant = allVariants.find((v) => v.external_url?.includes(sourcePath)) ?? sortedVariants[0];
-            if (controlVariant) pathToVariantId[sourcePath] = controlVariant.id;
+          sourcePagePath = new URL(vertical.source_url).pathname;
+          // Only include in query if no variant already points to this exact path
+          const variantPointsToSource = allVariants.some((v) => {
+            try { return v.external_url ? new URL(v.external_url).pathname === sourcePagePath : false; }
+            catch { return v.external_url === sourcePagePath; }
+          });
+          if (!variantPointsToSource && !pathValues.includes(sourcePagePath)) {
+            pathValues.push(sourcePagePath);
+            // Don't map to any variant — this is vertical-level traffic only
           }
         } catch { /* ignore invalid source_url */ }
       }
@@ -390,6 +396,17 @@ export async function getVerticalMetrics(
         for (const [path, variantId] of Object.entries(pathToVariantId)) {
           viewsByVariant[variantId] = (viewsByVariant[variantId] ?? 0) + (viewsByPath[path] ?? 0);
           clicksByVariant[variantId] = (clicksByVariant[variantId] ?? 0) + (clicksByPath[path] ?? 0);
+        }
+
+        // Source page traffic that isn't attributed to any variant — add to a special key
+        // so the vertical header total includes it
+        if (sourcePagePath && !pathToVariantId[sourcePagePath]) {
+          const sourceViews = viewsByPath[sourcePagePath] ?? 0;
+          const sourceClicks = clicksByPath[sourcePagePath] ?? 0;
+          if (sourceViews > 0) {
+            viewsByVariant['__source__'] = sourceViews;
+            clicksByVariant['__source__'] = sourceClicks;
+          }
         }
       }
     }
@@ -478,6 +495,8 @@ export async function getVerticalMetrics(
       },
       variants: variantMetrics,
       controlSlug: controlVariant.slug,
+      sourcePageVisitors: viewsByVariant['__source__'] ?? 0,
+      sourcePageConversions: clicksByVariant['__source__'] ?? 0,
     };
   } catch (err) {
     console.warn('[dashboard/queries] getVerticalMetrics error:', err);

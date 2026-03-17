@@ -46,6 +46,8 @@ interface VerticalSectionProps {
   metricsMap: Record<string, VariantMetricsData>;
   controlSlug: string;
   funnelFocus: string;
+  sourcePageVisitors?: number;
+  sourcePageConversions?: number;
 }
 
 const SPLIT_STRATEGIES = [
@@ -87,6 +89,8 @@ export function VerticalSection({
   metricsMap,
   controlSlug,
   funnelFocus,
+  sourcePageVisitors = 0,
+  sourcePageConversions = 0,
 }: VerticalSectionProps) {
   const [variantModalOpen, setVariantModalOpen] = useState(false);
   const [editingVariant, setEditingVariant] = useState<VariantRow | undefined>();
@@ -111,10 +115,12 @@ export function VerticalSection({
 
   const labels = FUNNEL_LABELS[funnelFocus] ?? FUNNEL_LABELS.acquisition;
 
-  // Vertical-level totals across non-killed variants
+  // Vertical-level totals across non-killed variants + source page
   const liveVariants = variants.filter((v) => (variantStatuses[v.id] ?? v.status) !== 'killed');
-  const totalVisitors = liveVariants.reduce((sum, v) => sum + (metricsMap[v.id]?.visitors ?? 0), 0);
-  const totalClicks = liveVariants.reduce((sum, v) => sum + (metricsMap[v.id]?.clicks ?? 0), 0);
+  const variantVisitors = liveVariants.reduce((sum, v) => sum + (metricsMap[v.id]?.visitors ?? 0), 0);
+  const variantClicks = liveVariants.reduce((sum, v) => sum + (metricsMap[v.id]?.clicks ?? 0), 0);
+  const totalVisitors = variantVisitors + sourcePageVisitors;
+  const totalClicks = variantClicks + sourcePageConversions;
   const overallConvRate = totalVisitors > 0 ? totalClicks / totalVisitors : 0;
 
   function openNew() {
@@ -477,23 +483,41 @@ export function VerticalSection({
                     {isControl && (
                       <span className="text-xs text-zinc-600 font-mono">control</span>
                     )}
-                    {variant.variant_type === 'external_url' && variant.external_url && (
-                      <span className="text-xs text-blue-400/70 flex items-center gap-1 truncate max-w-64">
-                        {'\u2197'} {(() => {
-                          const url = variant.external_url!;
+                    {variant.variant_type === 'external_url' && variant.external_url && (() => {
+                      const url = variant.external_url!;
+                      let displayUrl: string;
+                      let fullUrl: string;
+                      try {
+                        const u = new URL(url);
+                        displayUrl = u.hostname + u.pathname.replace(/\/$/, '');
+                        fullUrl = url;
+                      } catch {
+                        if (url.startsWith('/') && currentSourceUrl) {
                           try {
-                            const u = new URL(url);
-                            return u.hostname + u.pathname.replace(/\/$/, '');
+                            const base = new URL(currentSourceUrl);
+                            displayUrl = base.hostname + url;
+                            fullUrl = base.origin + url;
                           } catch {
-                            // Relative path like "/credits2" — show with vertical's domain
-                            if (url.startsWith('/') && currentSourceUrl) {
-                              try { return new URL(currentSourceUrl).hostname + url; } catch { /* */ }
-                            }
-                            return url;
+                            displayUrl = url;
+                            fullUrl = url;
                           }
-                        })()}
-                      </span>
-                    )}
+                        } else {
+                          displayUrl = url;
+                          fullUrl = url;
+                        }
+                      }
+                      return (
+                        <a
+                          href={fullUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-400/70 hover:text-blue-400 flex items-center gap-1 truncate max-w-64 transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {'\u2197'} {displayUrl}
+                        </a>
+                      );
+                    })()}
                   </div>
                 </div>
 
