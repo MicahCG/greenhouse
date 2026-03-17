@@ -236,7 +236,7 @@ export async function queryEventTotals(params: {
     if (params.groupBy && seriesLabels.length > 0) {
       byGroup = {};
       seriesLabels.forEach((label, i) => {
-        const key = typeof label === 'object' ? label.value : String(label);
+        const key = Array.isArray(label) ? String(label[1] ?? label[0]) : typeof label === 'object' && label !== null ? (label as { value: string }).value : String(label);
         byGroup![key] = totals[i] ?? 0;
       });
     }
