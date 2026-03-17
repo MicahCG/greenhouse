@@ -214,9 +214,15 @@ export default async function VariantDetailPage({ params }: PageProps) {
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-zinc-500">CTA Click Rate</span>
-                <span className={totalVisitors > 0 ? 'text-blue-400' : 'text-zinc-400'}>
-                  {totalVisitors > 0 ? formatPct(convRate) : '—'}
+                <span className="text-zinc-500">Total Visitors</span>
+                <span className={totalVisitors > 0 ? 'text-white' : 'text-zinc-400'}>
+                  {totalVisitors > 0 ? totalVisitors.toLocaleString() : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-500">Total Conversions</span>
+                <span className={totalClicks > 0 ? 'text-blue-400' : 'text-zinc-400'}>
+                  {totalClicks > 0 ? totalClicks.toLocaleString() : '—'}
                 </span>
               </div>
             </div>

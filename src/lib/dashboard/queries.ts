@@ -546,8 +546,53 @@ export async function getVariantTimeSeries(
       }
       viewsEvent = 'Viewed';
       viewsFilters = [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: [urlPath] }];
-      // Conversion events (Credits Purchased, etc.) don't have path — query without filter
-      clicksFilters = [];
+
+      // Conversion events (e.g. User Signed Up) don't have a path property,
+      // so we can't filter them by page. Instead, get all external URL paths in
+      // this vertical, query total visitors across ALL of them, and attribute
+      // conversions proportionally based on this variant's visitor share.
+      const allVariants = await db.select().from(variants).where(eq(variants.vertical_id, variant.vertical_id));
+      const allPaths: string[] = [];
+      for (const v of allVariants) {
+        if (v.external_url) {
+          try { allPaths.push(new URL(v.external_url).pathname); }
+          catch { allPaths.push(v.external_url.startsWith('/') ? v.external_url : `/${v.external_url}`); }
+        }
+      }
+      // Also include the vertical's source page path if it exists
+      if (vertical.source_url) {
+        try {
+          const sourcePath = new URL(vertical.source_url).pathname;
+          if (!allPaths.includes(sourcePath)) allPaths.push(sourcePath);
+        } catch { /* ignore */ }
+      }
+
+      const [variantViewsSeries, totalViewsSeries, totalConvSeries] = await Promise.all([
+        queryEventSeries({ event: 'Viewed', start, end, filters: viewsFilters, metric: 'uniques' }),
+        // Total visitors across all paths in the vertical
+        queryEventSeries({
+          event: 'Viewed', start, end, metric: 'uniques',
+          filters: allPaths.length > 0
+            ? [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: allPaths }]
+            : viewsFilters,
+        }),
+        // Total global conversions (no path filter — conversion events don't have one)
+        queryEventSeries({ event: endEvent, start, end }),
+      ]);
+
+      const totalViewsMap = new Map(totalViewsSeries.map((p) => [p.date, p.value]));
+      const totalConvMap = new Map(totalConvSeries.map((p) => [p.date, p.value]));
+
+      return variantViewsSeries.map((p) => {
+        const visitors = p.value;
+        const totalVisitorsOnDate = totalViewsMap.get(p.date) ?? 0;
+        const totalConvOnDate = totalConvMap.get(p.date) ?? 0;
+        // Proportional attribution: this variant's share of conversions
+        const share = totalVisitorsOnDate > 0 ? visitors / totalVisitorsOnDate : 0;
+        const clicks = Math.round(totalConvOnDate * share);
+        const convRate = visitors > 0 ? clicks / visitors : 0;
+        return { date: p.date, visitors, clicks, convRate };
+      });
     } else {
       // Template variant: query by variant_id
       viewsEvent = (await getTrackedEvents(vertical.project_id))[0];
@@ -556,7 +601,7 @@ export async function getVariantTimeSeries(
     }
 
     const [viewsSeries, clicksSeries] = await Promise.all([
-      queryEventSeries({ event: viewsEvent, start, end, filters: viewsFilters, metric: variant.variant_type === 'external_url' ? 'uniques' : undefined }),
+      queryEventSeries({ event: viewsEvent, start, end, filters: viewsFilters }),
       queryEventSeries({ event: endEvent, start, end, filters: clicksFilters }),
     ]);
 
