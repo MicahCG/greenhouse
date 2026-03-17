@@ -621,6 +621,48 @@ export const AGENT_TOOLS = [
       required: ['change_id'],
     },
   },
+  {
+    name: 'generate_wireframe',
+    description:
+      'Generate an ASCII wireframe preview of a page. Use this after reading a source file with extract_page_content or read_file to show the user a visual representation of the page structure. The agent builds the ASCII art from its understanding of the source code — the tool formats and displays it. Call this to preview pages that cannot be shown in an iframe (e.g. auth-protected pages), and to show before/after comparisons when proposing text changes.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        title: {
+          type: 'string',
+          description: 'Page title (e.g. "Credits Page", "Pricing")',
+        },
+        sections: {
+          type: 'array',
+          description: 'Ordered list of page sections, each with a type and ASCII art content',
+          items: {
+            type: 'object',
+            properties: {
+              type: {
+                type: 'string',
+                enum: ['hero', 'cards', 'pricing', 'table', 'cta', 'section', 'nav', 'footer'],
+                description: 'Section type',
+              },
+              content: {
+                type: 'string',
+                description: 'ASCII art for this section using box-drawing characters (+----|). Include real text content from the source code.',
+              },
+            },
+            required: ['type', 'content'],
+          },
+        },
+        source_path: {
+          type: 'string',
+          description: 'Source file path this wireframe represents',
+        },
+        variant_label: {
+          type: 'string',
+          description: 'Label for this wireframe (e.g. "CURRENT", "VARIANT: /credits2"). Useful for before/after comparisons.',
+        },
+      },
+      required: ['title', 'sections', 'source_path'],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -1687,6 +1729,25 @@ export async function executeToolCall(
           pr_closed_at: prStatus.closedAt,
           verdict: change.verdict,
           hypothesis: change.hypothesis,
+        });
+      }
+
+      case 'generate_wireframe': {
+        const title = input.title as string;
+        const sections = input.sections as Array<{ type: string; content: string }>;
+        const sourcePath = input.source_path as string;
+        const variantLabel = input.variant_label as string | undefined;
+
+        const ascii = sections.map((s) => s.content).join('\n\n');
+
+        return JSON.stringify({
+          type: 'wireframe',
+          title,
+          ascii,
+          source_path: sourcePath,
+          variant_label: variantLabel ?? null,
+          section_count: sections.length,
+          message: 'Wireframe preview generated.',
         });
       }
 

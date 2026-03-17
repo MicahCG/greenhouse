@@ -49,6 +49,12 @@ export interface ChatMessage {
     prUrl?: string;
     prNumber?: number;
   };
+  wireframe?: {
+    title: string;
+    ascii: string;
+    sourcePath: string;
+    variantLabel?: string;
+  };
   status?: 'streaming' | 'complete';
 }
 
@@ -126,6 +132,7 @@ const TOOL_LABELS: Record<string, string> = {
   list_repo_files: 'Browsing repo',
   propose_code_change: 'Creating code PR',
   get_pr_status: 'Checking PR status',
+  generate_wireframe: 'Building wireframe preview',
 };
 
 function toolLabel(tool: string): string {
@@ -683,6 +690,41 @@ function PagePreviewCard({ data }: { data: ChatMessage['pagePreview'] }) {
 }
 
 // ---------------------------------------------------------------------------
+// WireframeCard — ASCII wireframe preview of a page
+// ---------------------------------------------------------------------------
+
+function WireframeCard({ data }: { data: ChatMessage['wireframe'] }) {
+  if (!data) return null;
+
+  return (
+    <div className="mt-3 border border-zinc-700/50 rounded-xl bg-zinc-900/80 overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-sm leading-none">&#9638;</span>
+          <span className="text-xs font-semibold text-zinc-300 truncate">{data.title}</span>
+          {data.variantLabel && (
+            <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+              {data.variantLabel}
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] text-zinc-600 font-mono truncate max-w-[200px]">{data.sourcePath}</span>
+      </div>
+
+      <div className="p-4 overflow-x-auto">
+        <pre className="text-xs font-mono leading-relaxed text-zinc-300 whitespace-pre">{data.ascii}</pre>
+      </div>
+
+      <div className="px-4 py-2 border-t border-white/5">
+        <p className="text-[10px] text-zinc-600">
+          Based on <span className="font-mono">{data.sourcePath}</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // DraftCard — shows accumulated text replacements as a visual diff
 // ---------------------------------------------------------------------------
 
@@ -1023,6 +1065,39 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
           } else if (event.type === 'tool_result') {
             const toolName = event.tool as string;
             const result = event.result as string;
+
+            if (toolName === 'generate_wireframe') {
+              try {
+                const parsed = JSON.parse(result) as {
+                  type?: string;
+                  title?: string;
+                  ascii?: string;
+                  source_path?: string;
+                  variant_label?: string | null;
+                };
+                if (parsed.type === 'wireframe' && parsed.ascii) {
+                  setMessages((prev) =>
+                    updateLastMessage(prev, (msg) => ({
+                      ...msg,
+                      wireframe: {
+                        title: parsed.title ?? '',
+                        ascii: parsed.ascii!,
+                        sourcePath: parsed.source_path ?? '',
+                        variantLabel: parsed.variant_label ?? undefined,
+                      },
+                      toolCalls: (msg.toolCalls ?? []).map((tc) =>
+                        tc.tool === toolName && !tc.done
+                          ? { ...tc, result, done: true }
+                          : tc
+                      ),
+                    }))
+                  );
+                  continue;
+                }
+              } catch {
+                // fall through
+              }
+            }
 
             if (toolName === 'show_draft_preview') {
               try {
@@ -1534,6 +1609,11 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
                   {/* Page preview card */}
                   {msg.pagePreview && (
                     <PagePreviewCard data={msg.pagePreview} />
+                  )}
+
+                  {/* Wireframe preview card */}
+                  {msg.wireframe && (
+                    <WireframeCard data={msg.wireframe} />
                   )}
 
                   {/* Draft preview card */}

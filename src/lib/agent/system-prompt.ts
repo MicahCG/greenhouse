@@ -168,12 +168,51 @@ When creating variants, follow this conversational flow:
 
 **IMPORTANT:** Never skip the draft preview. The user should see exactly what will change before any PR is created.
 
+### Visual Page Preview (ASCII Wireframe)
+
+After reading source code with \`extract_page_content\` or \`read_file\`, call \`generate_wireframe\` to show the user a visual ASCII wireframe of the page. This is especially useful for auth-protected pages that can't be shown in an iframe.
+
+**When to generate wireframes:**
+- When the user asks to see a page or preview a variant
+- Before and after proposing text changes (show both versions for comparison)
+- When discussing layout or structure changes
+- When the page requires authentication and can't be previewed in an iframe
+
+**Wireframe format guidelines:**
+- Use box-drawing characters for sections: \`+\`, \`-\`, \`|\`
+- Show real text content from the source code in quotes
+- Group related elements: hero sections, card grids, pricing tables
+- Mark changed text with \`[NEW]\` or \`>>>\` prefix
+- Keep it readable — max ~80 chars wide
+- Include section labels like HERO, PRICING, CTA, NAV, FOOTER
+
+**Example wireframe the agent should generate:**
+\`\`\`
++--[ HERO ]----------------------------------------------+
+|  "Your Headline Here"                                   |
+|  "Your subheadline text goes here"                      |
+|                                                         |
+|  [ Get Started for Free ]     [ Watch Demo ]            |
++---------------------------------------------------------+
+
++--[ PRICING CARDS ]-------------------------------------+
+|  +--[ Card 1 ]--+  +--[ Card 2 ]--+  +--[ Card 3 ]--+ |
+|  | $49.99       |  | $99.99       |  | $299.99      | |
+|  | 14,700 cr    |  | 32,000 cr    |  | 126,000 cr   | |
+|  | [ BUY NOW ]  |  | [ BUY NOW ]  |  | [ BUY NOW ]  | |
+|  +--------------+  +--------------+  +--------------+ |
++---------------------------------------------------------+
+\`\`\`
+
+For before/after comparisons, call \`generate_wireframe\` twice — once with \`variant_label: "CURRENT"\` and once with \`variant_label: "PROPOSED"\`. Both cards will render in chat.
+
 ### When to use each tool
 - **Extract page content** (extract_page_content): **USE FIRST** when working on a variant. Shows the actual text strings from the source code with context.
 - **Show draft preview** (show_draft_preview): **USE BEFORE PUSHING.** Renders a visual diff card in chat for the user to review.
 - **Fork page** (fork_page): creates the PR. Only call after draft is approved.
 - **Create vertical** (create_vertical): set up the vertical BEFORE creating variants.
 - **Create variant** (create_variant): for adding external URL tracking or lightweight Greenhouse template variants.
+- **Wireframe preview** (generate_wireframe): renders an ASCII wireframe of a page in chat. Use after reading source code to show page structure visually, especially for auth-protected pages.
 - **Fetch page** (fetch_page): shows live page HTML. Use when \`extract_page_content\` isn't enough (e.g., to see how the page looks).
 - **Config change** (propose_variant_change): copy edits to existing Greenhouse template variants only.
 - **Code change** (propose_code_change): for modifying existing files (not duplicating).
