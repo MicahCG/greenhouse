@@ -120,7 +120,7 @@ export default async function VariantDetailPage({ params }: PageProps) {
         {/* Left column */}
         <div className="lg:col-span-2 space-y-4">
           {/* Performance Over Time + Traffic Source */}
-          <VariantCharts series={timeSeries} trafficSources={trafficSources} />
+          <VariantCharts series={timeSeries} trafficSources={trafficSources} variantId={variant.id} />
 
           {/* Agent Change Log */}
           <div className="border border-white/10 rounded-xl bg-zinc-900 p-5">

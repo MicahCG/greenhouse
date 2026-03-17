@@ -648,7 +648,7 @@ function PagePreviewCard({ data }: { data: ChatMessage['pagePreview'] }) {
             src={data.url}
             className="w-full h-full border-0 bg-white"
             title={`Preview: ${data.url}`}
-            sandbox="allow-scripts allow-same-origin"
+            sandbox="allow-scripts allow-same-origin allow-top-navigation-by-user-activation allow-popups"
             onError={() => setIframeError(true)}
             onLoad={(e) => {
               // Some sites block iframe but don't fire onerror —
