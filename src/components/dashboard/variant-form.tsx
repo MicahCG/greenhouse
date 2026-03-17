@@ -63,7 +63,7 @@ function getInitialConfig(variant?: ExistingVariant): Partial<VariantConfig> {
 export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceFile, sourceUrl, onSaved, onCancel }: VariantFormProps) {
   const initialType: VariantType = variant
     ? ((variant.variant_type as VariantType) ?? 'template')
-    : (sourceFile ? 'fork' : 'template');
+    : (sourceFile ? 'fork' : 'external_url');
   const [variantType, setVariantType] = useState<VariantType>(initialType);
   // Fork / Variant Builder state
   const [forkRoute, setForkRoute] = useState('');
@@ -274,7 +274,7 @@ export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceF
           {canChangeType && (
             <div>
               <label className={labelClass}>Variant Type</label>
-              <div className={`grid gap-3 ${sourceFile ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              <div className={`grid gap-3 ${sourceFile ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {sourceFile && (
                   <button
                     type="button"
@@ -286,15 +286,6 @@ export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceF
                     <p className="text-xs text-zinc-500 mt-0.5">Duplicate source page at a new route with changes</p>
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setVariantType('template')}
-                  className={`border rounded-lg p-3 text-left transition-colors ${variantType === 'template' ? 'border-amber-500 bg-amber-500/10' : 'border-white/10 hover:border-white/25 bg-zinc-800/50'}`}
-                >
-                  <div className="text-lg mb-1">{'\u25A0'}</div>
-                  <p className="text-xs font-medium text-white">Greenhouse Template</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Landing page built from config, hosted at /lp/...</p>
-                </button>
                 <button
                   type="button"
                   onClick={() => setVariantType('external_url')}
