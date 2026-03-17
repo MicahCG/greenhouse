@@ -319,26 +319,89 @@ export async function getVerticalMetrics(
     // Look up tracked events from the parent project
     const [startEvent, endEvent] = await getTrackedEvents(vertical.project_id);
 
-    // Fetch start/end events grouped by variant_id for this vertical
-    const [viewsResult, clicksResult] = await Promise.all([
-      queryEventTotals({
-        event: startEvent,
-        start,
-        end,
-        groupBy: 'ep:variant_id',
-        filters: [{ subprop_type: 'event', subprop_key: 'vertical_id', subprop_op: 'is', subprop_value: [verticalId] }],
-      }),
-      queryEventTotals({
-        event: endEvent,
-        start,
-        end,
-        groupBy: 'ep:variant_id',
-        filters: [{ subprop_type: 'event', subprop_key: 'vertical_id', subprop_op: 'is', subprop_value: [verticalId] }],
-      }),
-    ]);
+    // Determine query strategy: external URL variants use path-based tracking,
+    // template variants use Greenhouse's vertical_id event property
+    const hasExternalVariants = allVariants.some((v) => v.variant_type === 'external_url');
+    const hasTemplateVariants = allVariants.some((v) => v.variant_type === 'template');
 
-    const viewsByVariant = viewsResult.byGroup ?? {};
-    const clicksByVariant = clicksResult.byGroup ?? {};
+    let viewsByVariant: Record<string, number> = {};
+    let clicksByVariant: Record<string, number> = {};
+
+    if (hasExternalVariants) {
+      // Build a map of URL paths → variant IDs for external variants
+      const pathToVariantId: Record<string, string> = {};
+      const paths: string[] = [];
+      for (const v of allVariants) {
+        if (v.external_url) {
+          let path: string;
+          try {
+            path = new URL(v.external_url).pathname;
+          } catch {
+            path = v.external_url.startsWith('/') ? v.external_url : `/${v.external_url}`;
+          }
+          pathToVariantId[path] = v.id;
+          paths.push(path);
+        }
+      }
+
+      if (paths.length > 0) {
+        // Query by page path instead of vertical_id
+        const [viewsResult, clicksResult] = await Promise.all([
+          queryEventTotals({
+            event: startEvent,
+            start,
+            end,
+            groupBy: 'ep:path',
+            filters: [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: paths }],
+          }),
+          queryEventTotals({
+            event: endEvent,
+            start,
+            end,
+            groupBy: 'ep:path',
+            filters: [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: paths }],
+          }),
+        ]);
+
+        const viewsByPath = viewsResult.byGroup ?? {};
+        const clicksByPath = clicksResult.byGroup ?? {};
+
+        // Map path results back to variant IDs
+        for (const [path, variantId] of Object.entries(pathToVariantId)) {
+          viewsByVariant[variantId] = (viewsByVariant[variantId] ?? 0) + (viewsByPath[path] ?? 0);
+          clicksByVariant[variantId] = (clicksByVariant[variantId] ?? 0) + (clicksByPath[path] ?? 0);
+        }
+      }
+    }
+
+    if (hasTemplateVariants) {
+      // Greenhouse template variants: query by vertical_id event property
+      const [viewsResult, clicksResult] = await Promise.all([
+        queryEventTotals({
+          event: startEvent,
+          start,
+          end,
+          groupBy: 'ep:variant_id',
+          filters: [{ subprop_type: 'event', subprop_key: 'vertical_id', subprop_op: 'is', subprop_value: [verticalId] }],
+        }),
+        queryEventTotals({
+          event: endEvent,
+          start,
+          end,
+          groupBy: 'ep:variant_id',
+          filters: [{ subprop_type: 'event', subprop_key: 'vertical_id', subprop_op: 'is', subprop_value: [verticalId] }],
+        }),
+      ]);
+
+      const templateViews = viewsResult.byGroup ?? {};
+      const templateClicks = clicksResult.byGroup ?? {};
+      for (const [id, count] of Object.entries(templateViews)) {
+        viewsByVariant[id] = (viewsByVariant[id] ?? 0) + count;
+      }
+      for (const [id, count] of Object.entries(templateClicks)) {
+        clicksByVariant[id] = (clicksByVariant[id] ?? 0) + count;
+      }
+    }
 
     const controlVisitors = viewsByVariant[controlVariant.id] ?? 0;
     const controlConversions = clicksByVariant[controlVariant.id] ?? 0;
