@@ -35,6 +35,7 @@ export interface ForkPageResult {
   variant_slug: string;
   change_id: string;
   replacements_applied: string[];
+  copied_siblings: string[];
   message: string;
 }
 
@@ -76,14 +77,59 @@ export async function forkPage(input: ForkPageInput): Promise<ForkPageResult> {
   const parentDir = sourceDir.substring(0, sourceDir.lastIndexOf('/'));
   const fileName = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
   const destPath = `${parentDir}/${newRoute}/${fileName}`;
+  const destDir = `${parentDir}/${newRoute}`;
+
+  // 3b. Detect relative imports that need to be copied (./file.css, ./component.tsx, etc.)
+  const relativeImportPattern = /(?:import|from)\s+['"]\.\/([^'"]+)['"]/g;
+  const relativeImports: string[] = [];
+  let importMatch;
+  while ((importMatch = relativeImportPattern.exec(newContent)) !== null) {
+    relativeImports.push(importMatch[1]);
+  }
+  // Also check CSS imports: import './file.css'
+  const cssImportPattern = /import\s+['"]\.\/([^'"]+\.css)['"]/g;
+  while ((importMatch = cssImportPattern.exec(file.content)) !== null) {
+    if (!relativeImports.includes(importMatch[1])) {
+      relativeImports.push(importMatch[1]);
+    }
+  }
 
   // 4. Create branch
   const branchName = buildBranchName('variant', `fork-${newRoute}`);
   await createBranch(repoFull, branchName);
 
-  // 5. Commit new file
+  // 5. Commit main page file
   const commitMessage = `[Greenhouse] Fork ${sourcePath} \u2192 ${destPath}\n\n${description}`;
   await createFile(repoFull, destPath, newContent, commitMessage, branchName);
+
+  // 5b. Copy sibling files (relative imports like CSS, local components)
+  const copiedSiblings: string[] = [];
+  for (const relImport of relativeImports) {
+    // Add common extensions if the import doesn't have one
+    const candidates = relImport.includes('.')
+      ? [relImport]
+      : [`${relImport}.tsx`, `${relImport}.ts`, `${relImport}.jsx`, `${relImport}.js`];
+
+    for (const candidate of candidates) {
+      const siblingSource = `${sourceDir}/${candidate}`;
+      const siblingDest = `${destDir}/${candidate}`;
+      try {
+        const siblingFile = await getFileContent(repoFull, siblingSource);
+        // Apply text replacements to sibling files too
+        let siblingContent = siblingFile.content;
+        for (const { find, replace } of replacements) {
+          if (siblingContent.includes(find)) {
+            siblingContent = siblingContent.replaceAll(find, replace);
+          }
+        }
+        await createFile(repoFull, siblingDest, siblingContent, `[Greenhouse] Copy ${candidate} for /${newRoute}`, branchName);
+        copiedSiblings.push(candidate);
+        break; // found the file, skip other extension candidates
+      } catch {
+        // File doesn't exist at this path — try next candidate or skip
+      }
+    }
+  }
 
   // 6. Create PR
   const prTitle = `[Greenhouse] New variant: /${newRoute}`;
@@ -185,6 +231,7 @@ export async function forkPage(input: ForkPageInput): Promise<ForkPageResult> {
     variant_slug: newVariant.slug,
     change_id: changeRecord.id,
     replacements_applied: appliedReplacements,
-    message: `Done! PR #${prResult.number} created. New route /${newRoute} will go live after merge. Variant "${newVariant.slug}" is tracking it in Greenhouse (paused until merge).`,
+    copied_siblings: copiedSiblings,
+    message: `Done! PR #${prResult.number} created (${1 + copiedSiblings.length} files). New route /${newRoute} will go live after merge. Variant "${newVariant.slug}" is tracking it in Greenhouse (paused until merge).`,
   };
 }

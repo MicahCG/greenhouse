@@ -103,4 +103,17 @@ All timestamps use UTC. All IDs are UUIDs.
 - `src/lib/stats/` — Statistical significance utilities
 - `src/lib/traffic/` — UTM parsing + source detection
 - `src/lib/db/` — Drizzle schema + queries
+- `src/lib/github/` — GitHub client, fork-page utility, file permissions
 - `middleware.ts` — A/B traffic splitting + auth check
+
+## Pre-commit Checklist
+
+**ALWAYS run before committing or pushing:**
+1. `npx tsc --noEmit` — Type check. Must pass with zero errors.
+2. `npm run build` — Full Next.js production build. Must succeed. Vercel will reject the deploy if this fails.
+
+**Common build failures:**
+- Missing imports: if you add a new file, make sure all imports resolve
+- The fork_page tool copies files to new routes — relative imports (./file.css, ./component.tsx) are auto-copied, but shared imports (@/components/...) are not
+- Unused variables in strict mode: remove them, don't leave `_unused` prefixes
+- When modifying the Popcorn repo (revel-xyz/wonder-web) via fork_page, the POPCORN build must also pass — check that forked files don't have broken relative imports

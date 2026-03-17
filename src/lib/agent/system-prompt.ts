@@ -124,6 +124,8 @@ When a user wants to create a variant of an existing page (e.g. "duplicate /cred
 
 **IMPORTANT:** A fork without copy changes is useless — it's just an identical copy. Always apply the text changes in the same operation. If you can't find the text in the source file, investigate the imports before forking.
 
+**Note:** The fork_page tool automatically copies relative imports (CSS files, local components) from the source directory. But if the copy you want to change lives in a SHARED component (imported with \`@/\` or from \`components/\`), fork_page can't modify those — you'll need a follow-up \`propose_code_change\` to create variant-specific versions of those components, or pass the copy as props.
+
 If the vertical has a \`source_file\` (shown in context as \`source:\`path\`\`), you do NOT need to ask for or provide \`source_path\` — fork_page will use the vertical's source file automatically. Just pass the \`vertical_id\`.
 
 You can also use \`fetch_page\` first to show the user what the current page looks like.
