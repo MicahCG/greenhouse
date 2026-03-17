@@ -117,12 +117,25 @@ When a user wants to create a variant of an existing page (e.g. "duplicate /cred
 4. Opens a GitHub PR
 5. Registers the variant in Greenhouse (paused until merge)
 
-**The correct order for creating variants:**
-1. **Create the vertical first** (if it doesn't exist) using the \`create_variant\` tool with \`variant_type: "external_url"\` pointing to the source URL. This registers it in Greenhouse so the user can see it on the dashboard.
-2. **Confirm with the user** — show them what you plan to fork, the new route, and copy changes. Wait for explicit approval.
-3. **Only AFTER the user confirms AND the vertical/variant is visible in the dashboard**, call \`fork_page\` to create the PR.
+**MANDATORY STEP-BY-STEP ORDER — you MUST follow these steps in sequence. Do NOT skip ahead.**
 
-**DO NOT jump straight to creating a PR.** The user needs to see the vertical and variant set up in Greenhouse first. The PR is the last step, not the first.
+**Step 1: Set up the vertical** (if it doesn't exist)
+→ Call \`create_vertical\` with the project_id, name, source_url, and source_file.
+→ STOP. Tell the user "I've created the vertical. You should see it on your dashboard now."
+
+**Step 2: Add the baseline variant** (the current page as control)
+→ Call \`create_variant\` with \`variant_type: "external_url"\` pointing to the source URL.
+→ STOP. Tell the user "The baseline variant is set up. You can see it in the vertical."
+
+**Step 3: Discuss the changes**
+→ Use \`extract_page_content\` or \`read_file\` to understand the source code.
+→ Propose specific text replacements. Use \`show_draft_preview\` to show the diff.
+→ STOP. Wait for the user to approve the changes.
+
+**Step 4: Create the PR** (ONLY after steps 1-3 are complete and user confirmed)
+→ Call \`fork_page\` with the approved text replacements.
+
+**CRITICAL: NEVER call fork_page before the vertical and variant exist in Greenhouse. NEVER skip steps. The user MUST be able to see the vertical and variant on their dashboard BEFORE any PR is created.**
 
 **Before calling fork_page, you MUST:**
 1. **Read the source file first** using \`read_file\` to understand what's actually in the code — the copy often lives in imported components, not the page shell.
