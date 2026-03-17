@@ -199,13 +199,56 @@ function renderMarkdown(text: string): React.ReactNode[] {
 }
 
 function renderInline(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
+  // Split on bold, markdown links, inline code, and bare URLs
+  const pattern = /(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\)|`[^`]+`|https?:\/\/[^\s)]+)/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+  let key = 0;
+
+  while ((match = pattern.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      parts.push(<span key={key++}>{text.slice(lastIndex, match.index)}</span>);
     }
-    return <span key={i}>{part}</span>;
-  });
+
+    const m = match[0];
+    if (m.startsWith('**') && m.endsWith('**')) {
+      // Bold
+      parts.push(<strong key={key++} className="font-semibold text-white">{m.slice(2, -2)}</strong>);
+    } else if (m.startsWith('[')) {
+      // Markdown link: [text](url)
+      const linkMatch = m.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (linkMatch) {
+        parts.push(
+          <a key={key++} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">
+            {linkMatch[1]}
+          </a>
+        );
+      } else {
+        parts.push(<span key={key++}>{m}</span>);
+      }
+    } else if (m.startsWith('`') && m.endsWith('`')) {
+      // Inline code
+      parts.push(<code key={key++} className="bg-zinc-800 text-amber-400 px-1 py-0.5 rounded text-xs font-mono">{m.slice(1, -1)}</code>);
+    } else if (m.startsWith('http')) {
+      // Bare URL
+      parts.push(
+        <a key={key++} href={m} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2 break-all">
+          {m}
+        </a>
+      );
+    }
+
+    lastIndex = match.index + m.length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(<span key={key++}>{text.slice(lastIndex)}</span>);
+  }
+
+  return parts.length > 0 ? parts : text;
 }
 
 // ---------------------------------------------------------------------------

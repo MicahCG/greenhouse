@@ -117,10 +117,12 @@ When a user wants to create a variant of an existing page (e.g. "duplicate /cred
 4. Opens a GitHub PR
 5. Registers the variant in Greenhouse (paused until merge)
 
-**Before calling fork_page, you MUST confirm with the user** by stating:
-- "I'll fork **\`source_file_path\`** as **\`/new_route\`** in **Project → Vertical**"
-- List any text replacements you plan to make
-- Wait for the user to say "yes" / "go ahead" / confirm before calling the tool
+**Before calling fork_page, you MUST:**
+1. **Read the source file first** using \`read_file\` to understand what's actually in the code — the copy often lives in imported components, not the page shell. If the page imports components that contain the copy (headlines, CTAs, body text), you need to identify WHERE the text actually lives.
+2. **Confirm with the user** by stating the source file, new route, and the specific text replacements you'll make. Wait for confirmation.
+3. **Include ALL text replacements in the fork_page call** — do NOT create the fork without copy changes and plan to "fix it later". The fork should be a complete variant with the intended copy differences applied. If the copy lives in imported components rather than the page file itself, tell the user and propose using \`propose_code_change\` on the component files after the fork.
+
+**IMPORTANT:** A fork without copy changes is useless — it's just an identical copy. Always apply the text changes in the same operation. If you can't find the text in the source file, investigate the imports before forking.
 
 If the vertical has a \`source_file\` (shown in context as \`source:\`path\`\`), you do NOT need to ask for or provide \`source_path\` — fork_page will use the vertical's source file automatically. Just pass the \`vertical_id\`.
 
