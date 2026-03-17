@@ -12,7 +12,7 @@ const BASE_URL = 'https://amplitude.com/api/2';
 
 // Cache TTL: 30 minutes. unstable_cache persists across hot reloads and
 // force-dynamic pages, preventing Amplitude rate-limit (429) errors.
-const CACHE_TTL_SECONDS = 30 * 60;
+const CACHE_TTL_SECONDS = 5 * 60; // 5 minutes
 
 // ---------------------------------------------------------------------------
 // Auth helpers
@@ -147,7 +147,7 @@ const amplitudeFetch = unstable_cache(
     const params = JSON.parse(paramsStr) as Record<string, string>;
     return amplitudeFetchRaw(path, params);
   },
-  ['amplitude-fetch'],
+  ['amplitude-fetch-v2'],
   { revalidate: CACHE_TTL_SECONDS }
 );
 

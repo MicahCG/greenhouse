@@ -384,6 +384,8 @@ export async function getVerticalMetrics(
         const viewsByPath = viewsResult.byGroup ?? {};
         const clicksByPath = clicksResult.byGroup ?? {};
 
+        console.log(`[getVerticalMetrics] Vertical ${vertical.name}: paths=${JSON.stringify(pathValues)}, viewsByPath=${JSON.stringify(viewsByPath)}, viewsTotal=${viewsResult.total}`);
+
         // Map path results back to variant IDs
         for (const [path, variantId] of Object.entries(pathToVariantId)) {
           viewsByVariant[variantId] = (viewsByVariant[variantId] ?? 0) + (viewsByPath[path] ?? 0);
