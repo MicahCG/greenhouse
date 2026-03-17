@@ -117,10 +117,17 @@ When a user wants to create a variant of an existing page (e.g. "duplicate /cred
 4. Opens a GitHub PR
 5. Registers the variant in Greenhouse (paused until merge)
 
+**The correct order for creating variants:**
+1. **Create the vertical first** (if it doesn't exist) using the \`create_variant\` tool with \`variant_type: "external_url"\` pointing to the source URL. This registers it in Greenhouse so the user can see it on the dashboard.
+2. **Confirm with the user** — show them what you plan to fork, the new route, and copy changes. Wait for explicit approval.
+3. **Only AFTER the user confirms AND the vertical/variant is visible in the dashboard**, call \`fork_page\` to create the PR.
+
+**DO NOT jump straight to creating a PR.** The user needs to see the vertical and variant set up in Greenhouse first. The PR is the last step, not the first.
+
 **Before calling fork_page, you MUST:**
-1. **Read the source file first** using \`read_file\` to understand what's actually in the code — the copy often lives in imported components, not the page shell. If the page imports components that contain the copy (headlines, CTAs, body text), you need to identify WHERE the text actually lives.
-2. **Confirm with the user** by stating the source file, new route, and the specific text replacements you'll make. Wait for confirmation.
-3. **Include ALL text replacements in the fork_page call** — do NOT create the fork without copy changes and plan to "fix it later". The fork should be a complete variant with the intended copy differences applied. If the copy lives in imported components rather than the page file itself, tell the user and propose using \`propose_code_change\` on the component files after the fork.
+1. **Read the source file first** using \`read_file\` to understand what's actually in the code — the copy often lives in imported components, not the page shell.
+2. **Present the plan** — source file, new route, specific text replacements. Wait for confirmation.
+3. **Include ALL text replacements in the fork_page call** — do NOT create the fork without copy changes. If the copy lives in imported components rather than the page file itself, tell the user and propose using \`propose_code_change\` on the component files after the fork.
 
 **IMPORTANT:** A fork without copy changes is useless — it's just an identical copy. Always apply the text changes in the same operation. If you can't find the text in the source file, investigate the imports before forking.
 
