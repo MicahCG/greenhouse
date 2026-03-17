@@ -99,6 +99,9 @@ export function VerticalSection({
   const [variantMenuOpen, setVariantMenuOpen] = useState<string | null>(null);
   const [renamingName, setRenamingName] = useState<string | null>(null);
   const [editingSource, setEditingSource] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [dailyData, setDailyData] = useState<Array<{ date: string; visitors: number }> | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
   const [editSourceUrl, setEditSourceUrl] = useState(vertical.source_url ?? '');
   const [editSourceFile, setEditSourceFile] = useState(vertical.source_file ?? '');
   const [currentSourceUrl, setCurrentSourceUrl] = useState(vertical.source_url);
@@ -385,6 +388,25 @@ export function VerticalSection({
                 >
                   {currentSourceFile ? 'Edit Source' : 'Set Source Page'}
                 </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setShowStats((v) => !v);
+                    if (!dailyData && !loadingStats) {
+                      setLoadingStats(true);
+                      fetch(`/api/analytics/vertical/${vertical.id}/daily`)
+                        .then((r) => r.json())
+                        .then((d: { daily?: Array<{ date: string; visitors: number }> }) => {
+                          setDailyData(d.daily ?? []);
+                        })
+                        .catch(() => setDailyData([]))
+                        .finally(() => setLoadingStats(false));
+                    }
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/5 transition-colors border-t border-white/5"
+                >
+                  {showStats ? 'Hide Stats' : 'Performance Stats'}
+                </button>
                 {!isArchived && (
                   <button
                     onClick={archiveVertical}
@@ -443,6 +465,42 @@ export function VerticalSection({
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Performance stats panel */}
+      {showStats && (
+        <div className="px-5 py-4 border-b border-white/5 bg-zinc-800/20">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-zinc-400 font-medium">Daily Visitors (30d)</p>
+            <button onClick={() => setShowStats(false)} className="text-xs text-zinc-600 hover:text-zinc-400">{'\u2715'}</button>
+          </div>
+          {loadingStats && <p className="text-xs text-zinc-600 animate-pulse">Loading...</p>}
+          {dailyData && dailyData.length > 0 && (
+            <div className="flex items-end gap-px h-20">
+              {(() => {
+                const max = Math.max(...dailyData.map((d) => d.visitors), 1);
+                return dailyData.map((d, i) => (
+                  <div key={i} className="flex-1 group relative">
+                    <div
+                      className="bg-amber-500/40 hover:bg-amber-500/70 rounded-t-sm transition-colors w-full"
+                      style={{ height: `${Math.max((d.visitors / max) * 100, 2)}%` }}
+                    />
+                    <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block bg-zinc-800 border border-white/10 rounded px-2 py-1 text-[10px] text-zinc-300 whitespace-nowrap z-10">
+                      {d.date}: {d.visitors}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
+          {dailyData && dailyData.length === 0 && (
+            <p className="text-xs text-zinc-600">No data yet</p>
+          )}
+          <div className="flex items-center justify-between mt-2 text-[10px] text-zinc-600">
+            <span>{dailyData?.[0]?.date ?? ''}</span>
+            <span>{dailyData?.[dailyData.length - 1]?.date ?? ''}</span>
           </div>
         </div>
       )}

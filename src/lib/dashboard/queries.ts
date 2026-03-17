@@ -12,6 +12,7 @@ import {
   queryEventSeries,
   getDateRange,
   formatAmplitudeDate,
+  type AmplitudeFilter,
   type SeriesPoint,
 } from '@/lib/amplitude/server';
 import {
@@ -513,22 +514,42 @@ export async function getVariantTimeSeries(
   windowDays = 30
 ): Promise<TimeSeriesPoint[]> {
   try {
-    // Look up tracked events via variant → vertical → project
-    const [variant] = await db.select({ vertical_id: variants.vertical_id }).from(variants).where(eq(variants.id, variantId)).limit(1);
+    // Look up variant details to determine query strategy
+    const [variant] = await db.select().from(variants).where(eq(variants.id, variantId)).limit(1);
     if (!variant) return [];
-    const [vertical] = await db.select({ project_id: verticals.project_id }).from(verticals).where(eq(verticals.id, variant.vertical_id)).limit(1);
+    const [vertical] = await db.select().from(verticals).where(eq(verticals.id, variant.vertical_id)).limit(1);
     if (!vertical) return [];
-    const [startEvent, endEvent] = await getTrackedEvents(vertical.project_id);
+    const [_startEvent, endEvent] = await getTrackedEvents(vertical.project_id);
 
     const { start, end } = getDateRange(windowDays);
-    const filters = [{ subprop_type: 'event' as const, subprop_key: 'variant_id', subprop_op: 'is', subprop_value: [variantId] }];
+
+    let viewsFilters: AmplitudeFilter[];
+    let clicksFilters: AmplitudeFilter[];
+    let viewsEvent: string;
+
+    if (variant.variant_type === 'external_url' && variant.external_url) {
+      // External URL variant: query 'Viewed' event filtered by path
+      let urlPath: string;
+      try {
+        urlPath = new URL(variant.external_url).pathname;
+      } catch {
+        urlPath = variant.external_url.startsWith('/') ? variant.external_url : `/${variant.external_url}`;
+      }
+      viewsEvent = 'Viewed';
+      viewsFilters = [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: [urlPath] }];
+      clicksFilters = [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: [urlPath] }];
+    } else {
+      // Template variant: query by variant_id
+      viewsEvent = (await getTrackedEvents(vertical.project_id))[0];
+      viewsFilters = [{ subprop_type: 'event', subprop_key: 'variant_id', subprop_op: 'is', subprop_value: [variantId] }];
+      clicksFilters = viewsFilters;
+    }
 
     const [viewsSeries, clicksSeries] = await Promise.all([
-      queryEventSeries({ event: startEvent, start, end, filters }),
-      queryEventSeries({ event: endEvent, start, end, filters }),
+      queryEventSeries({ event: viewsEvent, start, end, filters: viewsFilters, metric: variant.variant_type === 'external_url' ? 'uniques' : undefined }),
+      queryEventSeries({ event: endEvent, start, end, filters: clicksFilters }),
     ]);
 
-    // Zip by date — use viewsSeries as the date index
     const clickMap = new Map(clicksSeries.map((p) => [p.date, p.value]));
 
     return viewsSeries.map((p) => {
