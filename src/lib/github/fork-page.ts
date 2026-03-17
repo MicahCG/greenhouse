@@ -72,6 +72,27 @@ export async function forkPage(input: ForkPageInput): Promise<ForkPageResult> {
     }
   }
 
+  // 2b. Safety check: detect if replacements changed any @/ import paths
+  // This would break the Vercel build if the new paths don't exist
+  const originalImports = new Set(
+    (file.content.match(/@\/[^'"]+/g) ?? []).map((m) => m)
+  );
+  const newImports = new Set(
+    (newContent.match(/@\/[^'"]+/g) ?? []).map((m) => m)
+  );
+  const brokenImports: string[] = [];
+  for (const imp of newImports) {
+    if (!originalImports.has(imp)) {
+      brokenImports.push(imp);
+    }
+  }
+  if (brokenImports.length > 0) {
+    throw new Error(
+      `Text replacements changed @/ import paths to files that may not exist: ${brokenImports.join(', ')}. ` +
+      `This will break the Vercel build. Don't change import paths — only change text content, string literals, and prop values.`
+    );
+  }
+
   // 3. Determine destination path
   const sourceDir = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
   const parentDir = sourceDir.substring(0, sourceDir.lastIndexOf('/'));

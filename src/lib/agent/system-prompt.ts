@@ -124,7 +124,12 @@ When a user wants to create a variant of an existing page (e.g. "duplicate /cred
 
 **IMPORTANT:** A fork without copy changes is useless — it's just an identical copy. Always apply the text changes in the same operation. If you can't find the text in the source file, investigate the imports before forking.
 
-**Note:** The fork_page tool automatically copies relative imports (CSS files, local components) from the source directory. But if the copy you want to change lives in a SHARED component (imported with \`@/\` or from \`components/\`), fork_page can't modify those — you'll need a follow-up \`propose_code_change\` to create variant-specific versions of those components, or pass the copy as props.
+**CRITICAL — import paths:** The fork_page tool copies the page file and its relative imports (\`./file.css\`, \`./component.tsx\`). It does NOT copy \`@/\` aliased imports. When forking a page:
+- **DO NOT change \`@/\` import paths** to point to files that don't exist. This breaks the Vercel build.
+- If the copy you want to change lives in a shared component (\`@/components/...\`), you have two options:
+  1. **Use text_replacements on string literals** in the page file (e.g., replace prop values, JSX text content)
+  2. **After the fork, use \`propose_code_change\`** to also create the variant-specific component files at the new paths
+- **Never create a fork that references non-existent files.** If you need to create multiple files, fork the page first, then push additional files to the same branch with \`propose_code_change\`.
 
 If the vertical has a \`source_file\` (shown in context as \`source:\`path\`\`), you do NOT need to ask for or provide \`source_path\` — fork_page will use the vertical's source file automatically. Just pass the \`vertical_id\`.
 
