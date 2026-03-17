@@ -1,7 +1,6 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import Image from 'next/image';
 import { useTracking } from '@/components/landing-pages/tracking-wrapper';
 import type { VariantConfig } from '@/lib/types/variant-config';
 
@@ -57,11 +56,10 @@ export function HeroSplit({ config }: HeroSplitProps) {
         {/* Right: image */}
         <div className="flex-1 flex items-center justify-center">
           {config.hero_image ? (
-            <Image
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
               src={config.hero_image}
               alt={config.headline}
-              width={560}
-              height={420}
               className="rounded-2xl object-cover w-full max-w-lg"
             />
           ) : (

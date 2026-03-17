@@ -10,6 +10,7 @@ async function seed() {
     funnel_focus: 'acquisition',
     status: 'active',
     significance_threshold: 0.95,
+    tracked_events: ['Page View', 'User Signed Up'],
   }).returning();
 
   console.log('Created project:', project.id);

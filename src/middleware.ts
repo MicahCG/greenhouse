@@ -1,26 +1,34 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { neon } from '@neondatabase/serverless';
 
 const isDashboard = createRouteMatcher(['/dashboard(.*)']);
 
-// Variant weights cached at edge — populated from DB at build time via /api/variant-weights
-// For Phase 1, we use a static fallback that mirrors our seed data.
-// In production, this should be populated from the DB or a CDN-cached endpoint.
-const STATIC_VARIANT_WEIGHTS: Record<string, Array<{ slug: string; weight: number }>> = {
-  creators: [
-    { slug: 'variant-a', weight: 50 },
-    { slug: 'variant-b', weight: 50 },
-  ],
-  educators: [
-    { slug: 'variant-a', weight: 50 },
-    { slug: 'variant-b', weight: 50 },
-  ],
-};
+// Module-level cache (persists within edge worker instance)
+const variantCache = new Map<string, { variants: Array<{ slug: string; weight: number }>; ts: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-function assignVariant(verticalSlug: string): string | null {
-  const weights = STATIC_VARIANT_WEIGHTS[verticalSlug];
-  if (!weights || weights.length === 0) return null;
+async function getVariantWeights(verticalSlug: string): Promise<Array<{ slug: string; weight: number }>> {
+  const cached = variantCache.get(verticalSlug);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.variants;
+
+  const sql = neon(process.env.DATABASE_URL!);
+  const rows = await sql`
+    SELECT v.slug, v.traffic_weight as weight
+    FROM variants v
+    JOIN verticals vert ON v.vertical_id = vert.id
+    WHERE vert.slug = ${verticalSlug} AND v.status = 'active'
+    ORDER BY v.slug
+  `;
+
+  const variants = rows.map((r) => ({ slug: String(r.slug), weight: Number(r.weight) }));
+  variantCache.set(verticalSlug, { variants, ts: Date.now() });
+  return variants;
+}
+
+function pickVariant(weights: Array<{ slug: string; weight: number }>): string | null {
+  if (weights.length === 0) return null;
 
   const total = weights.reduce((sum, v) => sum + v.weight, 0);
   let rand = Math.random() * total;
@@ -48,7 +56,20 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
     const cookieName = `gh_variant_${verticalSlug}`;
     const existingVariant = req.cookies.get(cookieName)?.value;
 
-    const assignedVariant = existingVariant ?? assignVariant(verticalSlug);
+    let assignedVariant: string | null = null;
+
+    if (existingVariant) {
+      assignedVariant = existingVariant;
+    } else {
+      try {
+        const weights = await getVariantWeights(verticalSlug);
+        assignedVariant = pickVariant(weights);
+      } catch (err) {
+        console.warn('[middleware] Failed to fetch variant weights from DB:', err);
+        assignedVariant = null;
+      }
+    }
+
     if (!assignedVariant) return NextResponse.next();
 
     const url = req.nextUrl.clone();

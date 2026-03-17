@@ -1,11 +1,14 @@
 import Link from 'next/link';
 import { UserButton } from '@clerk/nextjs';
+import { ChatSlideOver } from '@/components/dashboard/chat-slide-over';
+import { NotificationsBell } from '@/components/dashboard/notifications-bell';
 
 const navItems = [
-  { href: '/dashboard', label: 'Overview', icon: '◼' },
+  { href: '/dashboard', label: 'Dashboard', icon: '◼' },
   { href: '/dashboard/analytics', label: 'Analytics', icon: '◈' },
-  { href: '/dashboard/ad-spend', label: 'Ad Spend', icon: '◉' },
+  { href: '/dashboard/ad-spend', label: 'Ad Management', icon: '◉' },
   { href: '/dashboard/agent-log', label: 'Agent Log', icon: '◎' },
+  { href: '/dashboard/pull-requests', label: 'Pull Requests', icon: '⌥' },
   { href: '/dashboard/chat', label: 'Growth Expert', icon: '◆' },
 ];
 
@@ -43,6 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Top bar */}
         <header className="h-14 border-b border-white/10 flex items-center px-6 gap-4 flex-shrink-0">
           <div className="flex-1" />
+          <NotificationsBell />
           <div className="text-xs text-zinc-500 bg-zinc-900 border border-white/10 rounded-md px-3 py-1.5">
             Acquisition Q1 2026
           </div>
@@ -53,6 +57,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
+
+      <ChatSlideOver />
     </div>
   );
 }

@@ -16,6 +16,7 @@
     "@neondatabase/serverless": "^1.0.2",
     "drizzle-orm": "^0.45.1",
     "next": "16.1.6",
+    "octokit": "^5.0.5",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.8.0",

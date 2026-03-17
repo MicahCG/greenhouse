@@ -16,8 +16,7 @@ export function detectTrafficSource(
     return 'paid'; // Google
   }
   if (searchParams.has('fbclid')) return 'paid'; // Meta
-  if (searchParams.has('ttclid')) return 'paid'; // TikTok
-  if (searchParams.has('msclkid')) return 'paid'; // Microsoft
+  if (searchParams.has('li_fat_id')) return 'paid'; // LinkedIn
 
   // 3. UTM medium indicates organic social
   if (utmMedium === 'organic_social' || utmMedium === 'social') {
@@ -35,7 +34,7 @@ export function detectTrafficSource(
   }
 
   const searchEngines = ['google', 'bing', 'yahoo', 'duckduckgo', 'baidu', 'yandex'];
-  const socialPlatforms = ['facebook', 'instagram', 'twitter', 'x.com', 'linkedin', 'tiktok', 'reddit', 'youtube', 'pinterest', 'snapchat'];
+  const socialPlatforms = ['facebook', 'instagram', 'linkedin'];
 
   if (searchEngines.some((se) => referrerHost.includes(se))) return 'organic';
   if (socialPlatforms.some((sp) => referrerHost.includes(sp))) return 'social';

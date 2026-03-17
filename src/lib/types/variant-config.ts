@@ -14,7 +14,7 @@ export const VariantConfigSchema = z.object({
   }).optional(),
   hero_image: z.string().optional(),
   social_proof: z.array(z.string()).optional(),
-  template: z.string(), // "hero-centered" | "hero-split" | "video-first"
+  template: z.string(), // "hero-centered" | "hero-split" | "video-first" | "external"
   theme: z.record(z.string(), z.string()).optional(),
   meta_title: z.string(),
   meta_description: z.string(),
@@ -22,3 +22,12 @@ export const VariantConfigSchema = z.object({
 });
 
 export type VariantConfig = z.infer<typeof VariantConfigSchema>;
+
+/** Minimal config schema for external URL variants */
+export const ExternalVariantConfigSchema = z.object({
+  label: z.string().optional(),
+  external_url: z.string().url(),
+  template: z.literal('external'),
+});
+
+export type ExternalVariantConfig = z.infer<typeof ExternalVariantConfigSchema>;
