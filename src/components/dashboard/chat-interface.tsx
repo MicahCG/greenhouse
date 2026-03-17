@@ -39,6 +39,16 @@ export interface ChatMessage {
     title: string;
     headings: string[];
   };
+  draft?: {
+    verticalId: string;
+    sourcePath: string;
+    newRoute: string;
+    hypothesis: string;
+    replacements: Array<{ find: string; replace: string; context?: string }>;
+    status: 'drafting' | 'pushing' | 'pushed';
+    prUrl?: string;
+    prNumber?: number;
+  };
   status?: 'streaming' | 'complete';
 }
 
@@ -102,6 +112,8 @@ const TOOL_LABELS: Record<string, string> = {
   get_variant_config: 'Reading variant config',
   get_change_history: 'Reviewing change history',
   propose_variant_change: 'Drafting change proposal',
+  extract_page_content: 'Extracting page content',
+  show_draft_preview: 'Building draft preview',
   create_vertical: 'Creating vertical',
   create_variant: 'Creating new variant',
   fork_page: 'Forking page as new variant',
@@ -671,6 +683,94 @@ function PagePreviewCard({ data }: { data: ChatMessage['pagePreview'] }) {
 }
 
 // ---------------------------------------------------------------------------
+// DraftCard — shows accumulated text replacements as a visual diff
+// ---------------------------------------------------------------------------
+
+function DraftCard({ data, onPush }: { data: ChatMessage['draft']; onPush: (draft: NonNullable<ChatMessage['draft']>) => Promise<void> }) {
+  const [pushing, setPushing] = useState(false);
+  const [result, setResult] = useState<{ prUrl: string; prNumber: number } | null>(null);
+
+  if (!data) return null;
+
+  async function handlePush() {
+    setPushing(true);
+    try {
+      await onPush(data!);
+      // result is set by the parent via the data.status changing
+    } catch {
+      setPushing(false);
+    }
+  }
+
+  const isPushed = data.status === 'pushed' || !!result;
+
+  return (
+    <div className="mt-3 border border-amber-500/20 rounded-xl bg-zinc-900/80 overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm leading-none">{'\u270F'}</span>
+          <span className="text-xs font-semibold text-amber-400">Draft Variant</span>
+        </div>
+        <span className="text-xs text-zinc-500 font-mono">{data.sourcePath} {'\u2192'} /{data.newRoute}</span>
+      </div>
+
+      <div className="p-4 space-y-3">
+        {/* Hypothesis */}
+        <div>
+          <p className="text-xs text-zinc-500 mb-1">Hypothesis</p>
+          <p className="text-sm text-zinc-200">{data.hypothesis}</p>
+        </div>
+
+        {/* Replacement diffs */}
+        <div>
+          <p className="text-xs text-zinc-500 mb-2">Proposed Changes ({data.replacements.length})</p>
+          <div className="space-y-2">
+            {data.replacements.map((r, idx) => (
+              <div key={idx} className="bg-zinc-800 rounded-lg px-3 py-2">
+                {r.context && (
+                  <p className="text-[10px] text-zinc-600 mb-1">{r.context}</p>
+                )}
+                <p className="text-xs">
+                  <span className="text-red-400 line-through">{r.find}</span>
+                </p>
+                <p className="text-xs mt-0.5">
+                  <span className="text-green-400">{r.replace}</span>
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Actions */}
+        {isPushed ? (
+          <div className="flex items-center gap-2">
+            <span className="text-green-400 text-xs">{'\u2713'} PR created</span>
+            {(data.prUrl || result?.prUrl) && (
+              <a
+                href={data.prUrl ?? result?.prUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-400 hover:text-blue-300 underline"
+              >
+                View PR #{data.prNumber ?? result?.prNumber} {'\u2197'}
+              </a>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={handlePush}
+            disabled={pushing || data.replacements.length === 0}
+            className="w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 text-xs font-medium px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {pushing ? 'Creating PR...' : `Push ${data.replacements.length} changes to GitHub`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Notify parent (dashboard) that data changed — triggers router.refresh()
 // ---------------------------------------------------------------------------
 
@@ -866,6 +966,42 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
           } else if (event.type === 'tool_result') {
             const toolName = event.tool as string;
             const result = event.result as string;
+
+            if (toolName === 'show_draft_preview') {
+              try {
+                const parsed = JSON.parse(result) as {
+                  type?: string;
+                  vertical_id?: string;
+                  source_path?: string;
+                  new_route?: string;
+                  hypothesis?: string;
+                  replacements?: Array<{ find: string; replace: string; context?: string }>;
+                };
+                if (parsed.type === 'draft_preview' && parsed.replacements) {
+                  setMessages((prev) =>
+                    updateLastMessage(prev, (msg) => ({
+                      ...msg,
+                      draft: {
+                        verticalId: parsed.vertical_id ?? '',
+                        sourcePath: parsed.source_path ?? '',
+                        newRoute: (parsed.new_route ?? '').replace(/^\//, ''),
+                        hypothesis: parsed.hypothesis ?? '',
+                        replacements: parsed.replacements ?? [],
+                        status: 'drafting' as const,
+                      },
+                      toolCalls: (msg.toolCalls ?? []).map((tc) =>
+                        tc.tool === toolName && !tc.done
+                          ? { ...tc, result, done: true }
+                          : tc
+                      ),
+                    }))
+                  );
+                  continue;
+                }
+              } catch {
+                // fall through
+              }
+            }
 
             if (toolName === 'fetch_page') {
               try {
@@ -1137,6 +1273,41 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
     }
   }
 
+  async function handleDraftPush(draft: NonNullable<ChatMessage['draft']>) {
+    const res = await fetch(`/api/verticals/${draft.verticalId}/variants/fork`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        new_route: draft.newRoute,
+        text_replacements: draft.replacements.map(({ find, replace }) => ({ find, replace })),
+        hypothesis: draft.hypothesis,
+        description: draft.hypothesis,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json() as { error?: string };
+      throw new Error(err.error ?? 'Failed to create PR');
+    }
+
+    const result = await res.json() as { pr_url: string; pr_number: number };
+
+    // Update the draft status in the message
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.draft?.verticalId === draft.verticalId && msg.draft?.newRoute === draft.newRoute) {
+          return {
+            ...msg,
+            draft: { ...msg.draft, status: 'pushed' as const, prUrl: result.pr_url, prNumber: result.pr_number },
+          };
+        }
+        return msg;
+      })
+    );
+
+    notifyDataChanged();
+  }
+
   return (
     <div className={`flex flex-col h-full bg-zinc-950`}>
       {/* Header */}
@@ -1288,6 +1459,11 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
                   {/* Page preview card */}
                   {msg.pagePreview && (
                     <PagePreviewCard data={msg.pagePreview} />
+                  )}
+
+                  {/* Draft preview card */}
+                  {msg.draft && (
+                    <DraftCard data={msg.draft} onPush={handleDraftPush} />
                   )}
 
                   {/* Suggested follow-ups */}

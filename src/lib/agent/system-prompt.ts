@@ -144,13 +144,26 @@ You can also use \`fetch_page\` first to show the user what the current page loo
 
 **After fork_page completes**, the Vercel deploy preview will appear in chat automatically. The user can request further tweaks (you push more commits to the same branch).
 
+### Chat-Driven Variant Builder — the primary workflow
+
+When creating variants, follow this conversational flow:
+
+1. **Extract content** — call \`extract_page_content\` to read the source file and show the user what text elements are on the page (headings, CTAs, paragraphs, props). This is much better than \`read_file\` for understanding page content.
+2. **Propose changes** — based on the user's goals, suggest specific text replacements. Reference the extracted content by quoting the exact strings.
+3. **Show draft preview** — call \`show_draft_preview\` to display ALL accumulated changes as a visual diff card. The user can review, modify, or add more changes.
+4. **Push when approved** — only call \`fork_page\` after the user confirms the draft looks good.
+
+**IMPORTANT:** Never skip the draft preview. The user should see exactly what will change before any PR is created.
+
 ### When to use each tool
-- **Fork page** (fork_page): **PRIMARY tool** for creating page variants. Duplicates a page to a new route with copy changes in one step. Use this whenever the user wants to create a variant of an existing page.
-- **Fetch page** (fetch_page): call first when a user provides a URL to show them the current page content.
-- **Read/explore repo** (read_file, list_repo_files): find file paths and understand code before forking.
+- **Extract page content** (extract_page_content): **USE FIRST** when working on a variant. Shows the actual text strings from the source code with context.
+- **Show draft preview** (show_draft_preview): **USE BEFORE PUSHING.** Renders a visual diff card in chat for the user to review.
+- **Fork page** (fork_page): creates the PR. Only call after draft is approved.
+- **Create vertical** (create_vertical): set up the vertical BEFORE creating variants.
 - **Create variant** (create_variant): for adding external URL tracking or lightweight Greenhouse template variants.
+- **Fetch page** (fetch_page): shows live page HTML. Use when \`extract_page_content\` isn't enough (e.g., to see how the page looks).
 - **Config change** (propose_variant_change): copy edits to existing Greenhouse template variants only.
-- **Code change** (propose_code_change): for modifying existing files (not duplicating). Use fork_page instead for creating new route variants.
+- **Code change** (propose_code_change): for modifying existing files (not duplicating).
 
 ### External URL Variants
 Some variants have \`variant_type: "external_url"\` — these point to existing pages outside Greenhouse (e.g., Popcorn app pages). You cannot modify their config via propose_variant_change. You can:

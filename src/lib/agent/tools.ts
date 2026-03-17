@@ -15,6 +15,7 @@ import {
   calculateMinSampleSize,
 } from '@/lib/stats/significance';
 import { fetchPageContent } from '@/lib/agent/page-ingest';
+import { extractSourceContent } from '@/lib/agent/source-extractor';
 import { forkPage } from '@/lib/github/fork-page';
 import {
   getFileContent,
@@ -362,6 +363,66 @@ export const AGENT_TOOLS = [
         },
       },
       required: ['url'],
+    },
+  },
+  {
+    name: 'extract_page_content',
+    description:
+      'Read a source file from the repo and extract all visible text content (headings, paragraphs, buttons, links, string props). Returns the text elements that actually appear on the page with line numbers and context. Use this BEFORE proposing text replacements so you know exactly what strings to target. Much more useful than read_file for understanding page content.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        repo: {
+          type: 'string',
+          enum: ['greenhouse', 'popcorn'],
+          description: 'Which repository',
+        },
+        path: {
+          type: 'string',
+          description: 'File path (e.g. "app/(sidebar)/credits/page.tsx")',
+        },
+      },
+      required: ['repo', 'path'],
+    },
+  },
+  {
+    name: 'show_draft_preview',
+    description:
+      'Show the user a visual draft preview of proposed text replacements before pushing to GitHub. Call this after discussing changes to give the user a chance to review all accumulated changes as a visual diff. The user can then approve (push), modify, or add more changes.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        vertical_id: {
+          type: 'string',
+          description: 'The vertical this variant belongs to',
+        },
+        source_path: {
+          type: 'string',
+          description: 'Source file being forked',
+        },
+        new_route: {
+          type: 'string',
+          description: 'New route name (e.g. "/smb")',
+        },
+        hypothesis: {
+          type: 'string',
+          description: 'What this variant tests',
+        },
+        replacements: {
+          type: 'array',
+          description: 'All proposed text replacements',
+          items: {
+            type: 'object',
+            properties: {
+              find: { type: 'string' },
+              replace: { type: 'string' },
+              context: { type: 'string', description: 'What element (e.g. "h1 heading")' },
+            },
+            required: ['find', 'replace'],
+          },
+        },
+      },
+      required: ['vertical_id', 'source_path', 'new_route', 'hypothesis', 'replacements'],
     },
   },
   {
@@ -813,6 +874,46 @@ export async function executeToolCall(
           new_status: newStatus,
           reason,
           updated: true,
+        });
+      }
+
+      case 'extract_page_content': {
+        const repoKey = input.repo as string;
+        const filePath = input.path as string;
+
+        if (!isRepoKey(repoKey)) {
+          return JSON.stringify({ error: 'repo must be "greenhouse" or "popcorn"' });
+        }
+
+        try {
+          const repoFull = resolveRepo(repoKey);
+          const file = await getFileContent(repoFull, filePath);
+          const result = extractSourceContent(file.content, filePath);
+
+          return JSON.stringify({
+            file: filePath,
+            total_lines: result.totalLines,
+            text_count: result.texts.length,
+            texts: result.texts,
+            imports: result.imports.filter((i) => !i.path.startsWith('react')).slice(0, 20),
+            tip: 'Use these text values in fork_page text_replacements. The "find" value must match EXACTLY.',
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return JSON.stringify({ error: `Failed to extract content: ${msg}` });
+        }
+      }
+
+      case 'show_draft_preview': {
+        // Display-only tool — returns input as-is to trigger DraftCard rendering in chat
+        return JSON.stringify({
+          type: 'draft_preview',
+          vertical_id: input.vertical_id,
+          source_path: input.source_path,
+          new_route: input.new_route,
+          hypothesis: input.hypothesis,
+          replacements: input.replacements,
+          message: 'Draft preview shown. User can approve to push, or request changes.',
         });
       }
 

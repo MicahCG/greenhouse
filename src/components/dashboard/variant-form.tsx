@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { VariantConfig } from '@/lib/types/variant-config';
 import { VariantPreview } from '@/components/dashboard/variant-preview';
+import type { ExtractedText } from '@/lib/agent/source-extractor';
 
 interface ExistingVariant {
   id: string;
@@ -64,12 +65,40 @@ export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceF
     ? ((variant.variant_type as VariantType) ?? 'template')
     : (sourceFile ? 'fork' : 'template');
   const [variantType, setVariantType] = useState<VariantType>(initialType);
-  // Fork mode state
+  // Fork / Variant Builder state
   const [forkRoute, setForkRoute] = useState('');
   const [forkHypothesis, setForkHypothesis] = useState('');
   const [forkDescription, setForkDescription] = useState('');
-  const [forkReplacements, setForkReplacements] = useState<Array<{ find: string; replace: string }>>([]);
   const [forkResult, setForkResult] = useState<{ pr_url: string; pr_number: number; new_route: string } | null>(null);
+  // Extracted content from source file
+  const [extractedTexts, setExtractedTexts] = useState<ExtractedText[]>([]);
+  const [editedTexts, setEditedTexts] = useState<Record<number, string>>({}); // line → edited value
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+
+  // Auto-extract content when fork mode is selected and sourceFile is set
+  useEffect(() => {
+    if (variantType === 'fork' && sourceFile && extractedTexts.length === 0 && !extracting) {
+      setExtracting(true);
+      setExtractError(null);
+      fetch(`/api/source-extract?repo=popcorn&path=${encodeURIComponent(sourceFile)}`)
+        .then((res) => res.json())
+        .then((data: { texts?: ExtractedText[]; error?: string }) => {
+          if (data.error) {
+            setExtractError(data.error);
+          } else if (data.texts) {
+            setExtractedTexts(data.texts);
+          }
+        })
+        .catch(() => setExtractError('Failed to fetch source content'))
+        .finally(() => setExtracting(false));
+    }
+  }, [variantType, sourceFile, extractedTexts.length, extracting]);
+
+  // Build replacements from edited texts
+  const forkReplacements = extractedTexts
+    .filter((t) => editedTexts[t.line] !== undefined && editedTexts[t.line] !== t.text)
+    .map((t) => ({ find: t.text, replace: editedTexts[t.line] }));
   const [config, setConfig] = useState<Partial<VariantConfig>>(() => getInitialConfig(variant));
   const [externalUrl, setExternalUrl] = useState(variant?.external_url ?? (variant?.config as Record<string, unknown>)?.external_url as string ?? '');
   const [externalLabel, setExternalLabel] = useState((variant?.config as Record<string, unknown>)?.label as string ?? '');
@@ -280,11 +309,16 @@ export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceF
           )}
 
           {variantType === 'fork' ? (
-            /* Fork mode */
+            /* Variant Builder mode — extracted content editor */
             <div className="space-y-4">
-              <div className="bg-zinc-800/50 border border-white/5 rounded-lg px-3 py-2">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Source file</p>
-                <p className="text-xs text-zinc-300 font-mono mt-0.5">{sourceFile}</p>
+              <div className="bg-zinc-800/50 border border-white/5 rounded-lg px-3 py-2 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Source file</p>
+                  <p className="text-xs text-zinc-300 font-mono mt-0.5">{sourceFile}</p>
+                </div>
+                {sourceUrl && (
+                  <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400/60 hover:text-blue-400">{'\u2197'}</a>
+                )}
               </div>
               <div>
                 <label className={labelClass}>New Route Name *</label>
@@ -311,67 +345,51 @@ export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceF
                   className={inputClass}
                 />
               </div>
-              <div>
-                <label className={labelClass}>Description</label>
-                <input
-                  type="text"
-                  value={forkDescription}
-                  onChange={(e) => setForkDescription(e.target.value)}
-                  placeholder="Changed headline and CTA copy for urgency"
-                  className={inputClass}
-                />
-              </div>
+
+              {/* Extracted page content — editable */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className={labelClass.replace('mb-1', '')}>Text Replacements</label>
-                  <button
-                    type="button"
-                    onClick={() => setForkReplacements([...forkReplacements, { find: '', replace: '' }])}
-                    className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
-                  >
-                    + Add
-                  </button>
+                  <label className={labelClass.replace('mb-1', '')}>Page Content</label>
+                  {forkReplacements.length > 0 && (
+                    <span className="text-xs text-amber-400">{forkReplacements.length} change{forkReplacements.length !== 1 ? 's' : ''}</span>
+                  )}
                 </div>
-                {forkReplacements.length === 0 ? (
-                  <p className="text-xs text-zinc-600">No text changes — page will be an exact copy</p>
-                ) : (
-                  <div className="space-y-2">
-                    {forkReplacements.map((r, idx) => (
-                      <div key={idx} className="flex gap-2 items-start">
-                        <div className="flex-1 space-y-1">
+
+                {extracting && (
+                  <div className="text-xs text-zinc-500 animate-pulse py-4 text-center">Reading source file...</div>
+                )}
+                {extractError && (
+                  <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{extractError}</p>
+                )}
+
+                {extractedTexts.length > 0 && (
+                  <div className="space-y-1.5 max-h-80 overflow-y-auto">
+                    {extractedTexts.map((t) => {
+                      const isEdited = editedTexts[t.line] !== undefined && editedTexts[t.line] !== t.text;
+                      return (
+                        <div key={`${t.line}-${t.text.slice(0, 20)}`} className={`rounded-lg px-3 py-2 transition-colors ${isEdited ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-zinc-800/50 border border-transparent'}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] text-zinc-600 font-mono">{t.context}</span>
+                            {t.elementType && <span className="text-[10px] text-zinc-700">&lt;{t.elementType}&gt;</span>}
+                            <span className="text-[10px] text-zinc-700">L{t.line}</span>
+                          </div>
                           <input
                             type="text"
-                            value={r.find}
-                            onChange={(e) => {
-                              const updated = [...forkReplacements];
-                              updated[idx] = { ...updated[idx], find: e.target.value };
-                              setForkReplacements(updated);
-                            }}
-                            placeholder="Find text..."
-                            className={inputClass + ' text-xs text-red-400'}
+                            value={editedTexts[t.line] ?? t.text}
+                            onChange={(e) => setEditedTexts((prev) => ({ ...prev, [t.line]: e.target.value }))}
+                            className={`bg-transparent border-0 text-sm w-full focus:outline-none ${isEdited ? 'text-amber-300' : 'text-zinc-300'}`}
                           />
-                          <input
-                            type="text"
-                            value={r.replace}
-                            onChange={(e) => {
-                              const updated = [...forkReplacements];
-                              updated[idx] = { ...updated[idx], replace: e.target.value };
-                              setForkReplacements(updated);
-                            }}
-                            placeholder="Replace with..."
-                            className={inputClass + ' text-xs text-green-400'}
-                          />
+                          {isEdited && (
+                            <p className="text-xs text-red-400/60 line-through mt-0.5">{t.text}</p>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setForkReplacements(forkReplacements.filter((_, i) => i !== idx))}
-                          className="text-zinc-500 hover:text-red-400 transition-colors text-sm px-1 mt-2"
-                        >
-                          &times;
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
+                )}
+
+                {!extracting && extractedTexts.length === 0 && !extractError && (
+                  <p className="text-xs text-zinc-600 py-4 text-center">No source file set on this vertical</p>
                 )}
               </div>
             </div>
