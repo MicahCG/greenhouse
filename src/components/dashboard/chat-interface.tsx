@@ -102,6 +102,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_variant_config: 'Reading variant config',
   get_change_history: 'Reviewing change history',
   propose_variant_change: 'Drafting change proposal',
+  create_vertical: 'Creating vertical',
   create_variant: 'Creating new variant',
   fork_page: 'Forking page as new variant',
   update_variant_status: 'Updating variant status',

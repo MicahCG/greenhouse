@@ -328,11 +328,25 @@ export async function getVerticalMetrics(
     let clicksByVariant: Record<string, number> = {};
 
     if (hasExternalVariants) {
-      // Build a map of URL paths → variant IDs for external variants
       // Build map of URL paths → variant IDs
       // The 'Viewed' event uses 'path' property WITH leading slash (e.g. "/credits")
       const pathToVariantId: Record<string, string> = {};
       const pathValues: string[] = [];
+
+      // Include the vertical's source_url as a path to query
+      // (it represents the baseline/control page even if no variant explicitly points to it)
+      if (vertical.source_url) {
+        try {
+          const sourcePath = new URL(vertical.source_url).pathname;
+          if (!pathValues.includes(sourcePath)) {
+            pathValues.push(sourcePath);
+            // Map source path to the first variant (control) for display purposes
+            const controlVariant = allVariants.find((v) => v.external_url?.includes(sourcePath)) ?? sortedVariants[0];
+            if (controlVariant) pathToVariantId[sourcePath] = controlVariant.id;
+          }
+        } catch { /* ignore invalid source_url */ }
+      }
+
       for (const v of allVariants) {
         if (v.external_url) {
           let urlPath: string;
@@ -342,7 +356,7 @@ export async function getVerticalMetrics(
             urlPath = v.external_url.startsWith('/') ? v.external_url : `/${v.external_url}`;
           }
           pathToVariantId[urlPath] = v.id;
-          pathValues.push(urlPath);
+          if (!pathValues.includes(urlPath)) pathValues.push(urlPath);
         }
       }
 

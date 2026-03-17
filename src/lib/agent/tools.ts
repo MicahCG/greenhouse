@@ -315,6 +315,41 @@ export const AGENT_TOOLS = [
     },
   },
   {
+    name: 'create_vertical',
+    description:
+      'Create a new vertical (page experiment group) within a project. A vertical represents a specific page being tested. Set the source_url and source_file to link it to the actual page in the codebase. Use this BEFORE creating variants — the vertical must exist first.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        project_id: {
+          type: 'string',
+          description: 'The project UUID to create the vertical in',
+        },
+        name: {
+          type: 'string',
+          description: 'Display name (e.g. "Small Business Owners")',
+        },
+        slug: {
+          type: 'string',
+          description: 'URL slug (e.g. "smb"). Auto-generated from name if omitted.',
+        },
+        description: {
+          type: 'string',
+          description: 'What audience or page this vertical targets',
+        },
+        source_url: {
+          type: 'string',
+          description: 'The live page URL (e.g. "https://www.popcorn.co/faceless")',
+        },
+        source_file: {
+          type: 'string',
+          description: 'GitHub file path (e.g. "app/(landing)/faceless/page.tsx")',
+        },
+      },
+      required: ['project_id', 'name'],
+    },
+  },
+  {
     name: 'fetch_page',
     description:
       'Fetch a live URL and extract its content: title, headings, body text, CTAs/buttons, links, images, and meta tags. Use this FIRST when a user provides a URL and wants to create variants or optimize an existing page. This tells you what the page currently looks like so you can propose meaningful variations.',
@@ -778,6 +813,50 @@ export async function executeToolCall(
           new_status: newStatus,
           reason,
           updated: true,
+        });
+      }
+
+      case 'create_vertical': {
+        const projectId = input.project_id as string;
+        const name = input.name as string;
+        const description = (input.description as string) ?? '';
+        const sourceUrl = input.source_url as string | undefined;
+        const sourceFile = input.source_file as string | undefined;
+
+        // Verify project exists
+        const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+        if (!project) return JSON.stringify({ error: `Project not found: ${projectId}` });
+
+        // Generate slug
+        let slug = (input.slug as string) ?? name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+        // Check uniqueness
+        const [existing] = await db.select({ id: verticals.id }).from(verticals).where(eq(verticals.slug, slug)).limit(1);
+        if (existing) {
+          slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
+        }
+
+        const [vertical] = await db
+          .insert(verticals)
+          .values({
+            project_id: projectId,
+            slug,
+            name,
+            description,
+            source_url: sourceUrl,
+            source_file: sourceFile,
+            traffic_split_strategy: 'equal',
+          })
+          .returning();
+
+        return JSON.stringify({
+          vertical_id: vertical.id,
+          name: vertical.name,
+          slug: vertical.slug,
+          source_url: vertical.source_url,
+          source_file: vertical.source_file,
+          project_name: project.name,
+          message: `Vertical "${name}" created in ${project.name}. You can now add variants to it.`,
         });
       }
 
