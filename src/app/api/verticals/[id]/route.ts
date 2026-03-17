@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
-import { verticals, variants } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { verticals, variants, variant_versions, agent_changes } from '@/lib/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 const PatchVerticalSchema = z.object({
@@ -57,8 +57,16 @@ export async function DELETE(
 
   const { id } = await params;
 
-  // Delete variants first (no cascade in schema)
-  await db.delete(variants).where(eq(variants.vertical_id, id));
+  // Delete dependent records first (no cascade in schema)
+  const variantRows = await db.select({ id: variants.id }).from(variants).where(eq(variants.vertical_id, id));
+  const variantIds = variantRows.map((v) => v.id);
+
+  if (variantIds.length > 0) {
+    // Delete variant_versions and agent_changes that reference these variants
+    await db.delete(variant_versions).where(inArray(variant_versions.variant_id, variantIds));
+    await db.delete(agent_changes).where(inArray(agent_changes.variant_id, variantIds));
+    await db.delete(variants).where(eq(variants.vertical_id, id));
+  }
 
   const [deleted] = await db
     .delete(verticals)
