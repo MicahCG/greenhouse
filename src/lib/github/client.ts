@@ -73,7 +73,20 @@ export async function getFileContent(
   const params: Record<string, string> = { owner, repo, path };
   if (branch) params.ref = branch;
 
-  const { data } = await octokit.rest.repos.getContent(params as Parameters<typeof octokit.rest.repos.getContent>[0]);
+  let data;
+  try {
+    const resp = await octokit.rest.repos.getContent(params as Parameters<typeof octokit.rest.repos.getContent>[0]);
+    data = resp.data;
+  } catch (err) {
+    const status = (err as { status?: number }).status;
+    if (status === 404) {
+      throw new Error(`File not found: "${path}" in ${repoFull}${branch ? ` (branch: ${branch})` : ''}. Check that the path is correct.`);
+    }
+    if (status === 401 || status === 403) {
+      throw new Error(`GitHub auth failed (${status}) reading "${path}" from ${repoFull}. Your GITHUB_TOKEN may be expired or missing repo permissions.`);
+    }
+    throw err;
+  }
 
   if (Array.isArray(data)) {
     throw new Error(`Path "${path}" is a directory, not a file`);
@@ -104,18 +117,54 @@ export async function createBranch(
   const octokit = getOctokit();
 
   // Get SHA of the source branch
-  const { data: ref } = await octokit.rest.git.getRef({
-    owner,
-    repo,
-    ref: `heads/${fromBranch}`,
-  });
+  let baseSha: string;
+  try {
+    const { data: ref } = await octokit.rest.git.getRef({
+      owner,
+      repo,
+      ref: `heads/${fromBranch}`,
+    });
+    baseSha = ref.object.sha;
+  } catch (err) {
+    const status = (err as { status?: number }).status;
+    if (status === 404) {
+      throw new Error(`Base branch "${fromBranch}" not found in ${repoFull}. Check that the repo exists and your GITHUB_TOKEN has access.`);
+    }
+    if (status === 401 || status === 403) {
+      throw new Error(`GitHub auth failed (${status}) reading ${repoFull}. Your GITHUB_TOKEN may be expired or missing repo permissions.`);
+    }
+    throw err;
+  }
 
-  await octokit.rest.git.createRef({
-    owner,
-    repo,
-    ref: `refs/heads/${branchName}`,
-    sha: ref.object.sha,
-  });
+  try {
+    await octokit.rest.git.createRef({
+      owner,
+      repo,
+      ref: `refs/heads/${branchName}`,
+      sha: baseSha,
+    });
+  } catch (err) {
+    const status = (err as { status?: number }).status;
+    if (status === 422) {
+      // Branch already exists — update it to latest base SHA instead of failing
+      try {
+        await octokit.rest.git.updateRef({
+          owner,
+          repo,
+          ref: `heads/${branchName}`,
+          sha: baseSha,
+          force: true,
+        });
+        return;
+      } catch {
+        throw new Error(`Branch "${branchName}" already exists and could not be updated.`);
+      }
+    }
+    if (status === 401 || status === 403) {
+      throw new Error(`GitHub auth failed (${status}) creating branch in ${repoFull}. Your GITHUB_TOKEN may be expired or missing write permissions.`);
+    }
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -160,16 +209,27 @@ export async function createFile(
   const { owner, repo } = parseRepo(repoFull);
   const octokit = getOctokit();
 
-  const { data } = await octokit.rest.repos.createOrUpdateFileContents({
-    owner,
-    repo,
-    path,
-    message,
-    content: Buffer.from(content).toString('base64'),
-    branch,
-  });
+  try {
+    const { data } = await octokit.rest.repos.createOrUpdateFileContents({
+      owner,
+      repo,
+      path,
+      message,
+      content: Buffer.from(content).toString('base64'),
+      branch,
+    });
 
-  return (data.commit as { sha: string }).sha;
+    return (data.commit as { sha: string }).sha;
+  } catch (err) {
+    const status = (err as { status?: number }).status;
+    if (status === 401 || status === 403) {
+      throw new Error(`GitHub auth failed (${status}) writing "${path}" to ${repoFull}. Your GITHUB_TOKEN may be expired or missing write permissions.`);
+    }
+    if (status === 404) {
+      throw new Error(`Branch "${branch}" not found in ${repoFull} when trying to create "${path}".`);
+    }
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -186,14 +246,28 @@ export async function createPullRequest(
   const { owner, repo } = parseRepo(repoFull);
   const octokit = getOctokit();
 
-  const { data } = await octokit.rest.pulls.create({
-    owner,
-    repo,
-    head,
-    base,
-    title,
-    body,
-  });
+  let data;
+  try {
+    const resp = await octokit.rest.pulls.create({
+      owner,
+      repo,
+      head,
+      base,
+      title,
+      body,
+    });
+    data = resp.data;
+  } catch (err) {
+    const status = (err as { status?: number }).status;
+    const message = (err as { message?: string }).message ?? '';
+    if (status === 422 && message.includes('pull request already exists')) {
+      throw new Error(`A PR already exists for branch "${head}". Close or merge the existing PR first.`);
+    }
+    if (status === 401 || status === 403) {
+      throw new Error(`GitHub auth failed (${status}) creating PR in ${repoFull}. Your GITHUB_TOKEN may be expired or missing repo permissions.`);
+    }
+    throw new Error(`Failed to create PR in ${repoFull}: ${message || `HTTP ${status}`}`);
+  }
 
   // Add labels if they exist (best-effort)
   try {

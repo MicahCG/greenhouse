@@ -731,15 +731,19 @@ function WireframeCard({ data }: { data: ChatMessage['wireframe'] }) {
 function DraftCard({ data, onPush }: { data: ChatMessage['draft']; onPush: (draft: NonNullable<ChatMessage['draft']>) => Promise<void> }) {
   const [pushing, setPushing] = useState(false);
   const [result, setResult] = useState<{ prUrl: string; prNumber: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   if (!data) return null;
 
   async function handlePush() {
     setPushing(true);
+    setError(null);
     try {
       await onPush(data!);
       // result is set by the parent via the data.status changing
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
       setPushing(false);
     }
   }
@@ -782,6 +786,13 @@ function DraftCard({ data, onPush }: { data: ChatMessage['draft']; onPush: (draf
             ))}
           </div>
         </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+            <p className="text-xs text-red-400">{error}</p>
+          </div>
+        )}
 
         {/* Actions */}
         {isPushed ? (
