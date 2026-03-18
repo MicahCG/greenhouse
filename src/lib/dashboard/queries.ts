@@ -370,7 +370,7 @@ export async function getVerticalMetrics(
       if (pathValues.length > 0) {
         // Query 'Viewed' event (Popcorn's page view tracker) grouped by 'path' event property
         // This matches what Amplitude Web Analytics shows
-        const [viewsResult, clicksResult] = await Promise.all([
+        const [viewsResult, clicksResult, totalSiteViewsResult] = await Promise.all([
           queryEventTotals({
             event: 'Viewed',
             start,
@@ -380,31 +380,44 @@ export async function getVerticalMetrics(
             filters: [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: pathValues }],
           }),
           // End event (conversions) queried WITHOUT path filter — conversion events
-          // like "Credits Purchased" fire globally, not on a specific page path.
-          // Total conversions are split evenly across variants for now.
+          // like "User Signed Up" fire globally, not on a specific page path.
           queryEventTotals({
             event: endEvent,
             start,
             end,
           }),
+          // Total unique visitors across ALL pages — needed to compute what fraction
+          // of global conversions can be attributed to these specific paths.
+          queryEventTotals({
+            event: 'Viewed',
+            start,
+            end,
+            metric: 'uniques',
+          }),
         ]);
 
         const viewsByPath = viewsResult.byGroup ?? {};
         const totalConversions = clicksResult.total ?? 0;
+        const totalSiteVisitors = totalSiteViewsResult.total ?? 0;
 
         // Map path results back to variant IDs (visitors)
         for (const [path, variantId] of Object.entries(pathToVariantId)) {
           viewsByVariant[variantId] = (viewsByVariant[variantId] ?? 0) + (viewsByPath[path] ?? 0);
         }
 
-        // Distribute conversions proportionally by visitor share
-        // (since conversion events don't have path data)
+        // Distribute conversions proportionally:
+        // 1. Scale global conversions by (tracked path visitors / total site visitors)
+        //    to estimate how many conversions came from these pages
+        // 2. Then split among variants by their visitor share
         const totalPathVisitors = Object.values(viewsByPath).reduce((s, v) => s + v, 0);
-        if (totalConversions > 0 && totalPathVisitors > 0) {
+        const siteShare = totalSiteVisitors > 0 ? totalPathVisitors / totalSiteVisitors : 0;
+        const estimatedConversions = Math.round(totalConversions * siteShare);
+
+        if (estimatedConversions > 0 && totalPathVisitors > 0) {
           for (const [path, variantId] of Object.entries(pathToVariantId)) {
             const pathVisitors = viewsByPath[path] ?? 0;
             const share = pathVisitors / totalPathVisitors;
-            clicksByVariant[variantId] = (clicksByVariant[variantId] ?? 0) + Math.round(totalConversions * share);
+            clicksByVariant[variantId] = (clicksByVariant[variantId] ?? 0) + Math.round(estimatedConversions * share);
           }
         }
 
@@ -413,8 +426,8 @@ export async function getVerticalMetrics(
           const sourceViews = viewsByPath[sourcePagePath] ?? 0;
           if (sourceViews > 0) {
             viewsByVariant['__source__'] = sourceViews;
-            if (totalConversions > 0 && totalPathVisitors > 0) {
-              clicksByVariant['__source__'] = Math.round(totalConversions * (sourceViews / totalPathVisitors));
+            if (estimatedConversions > 0 && totalPathVisitors > 0) {
+              clicksByVariant['__source__'] = Math.round(estimatedConversions * (sourceViews / totalPathVisitors));
             }
           }
         }
@@ -567,29 +580,25 @@ export async function getVariantTimeSeries(
         } catch { /* ignore */ }
       }
 
-      const [variantViewsSeries, totalViewsSeries, totalConvSeries] = await Promise.all([
+      const [variantViewsSeries, totalSiteViewsSeries, totalConvSeries] = await Promise.all([
         queryEventSeries({ event: 'Viewed', start, end, filters: viewsFilters, metric: 'uniques' }),
-        // Total visitors across all paths in the vertical
-        queryEventSeries({
-          event: 'Viewed', start, end, metric: 'uniques',
-          filters: allPaths.length > 0
-            ? [{ subprop_type: 'event', subprop_key: 'path', subprop_op: 'is', subprop_value: allPaths }]
-            : viewsFilters,
-        }),
+        // Total unique visitors across ALL pages (not just tracked paths) —
+        // needed to compute what fraction of global conversions are attributable
+        queryEventSeries({ event: 'Viewed', start, end, metric: 'uniques' }),
         // Total global conversions (no path filter — conversion events don't have one)
         queryEventSeries({ event: endEvent, start, end }),
       ]);
 
-      const totalViewsMap = new Map(totalViewsSeries.map((p) => [p.date, p.value]));
+      const totalSiteViewsMap = new Map(totalSiteViewsSeries.map((p) => [p.date, p.value]));
       const totalConvMap = new Map(totalConvSeries.map((p) => [p.date, p.value]));
 
       return variantViewsSeries.map((p) => {
         const visitors = p.value;
-        const totalVisitorsOnDate = totalViewsMap.get(p.date) ?? 0;
+        const totalSiteVisitorsOnDate = totalSiteViewsMap.get(p.date) ?? 0;
         const totalConvOnDate = totalConvMap.get(p.date) ?? 0;
-        // Proportional attribution: this variant's share of conversions
-        const share = totalVisitorsOnDate > 0 ? visitors / totalVisitorsOnDate : 0;
-        const clicks = Math.round(totalConvOnDate * share);
+        // Scale: this variant's visitors as fraction of total site → estimate conversions
+        const siteShare = totalSiteVisitorsOnDate > 0 ? visitors / totalSiteVisitorsOnDate : 0;
+        const clicks = Math.round(totalConvOnDate * siteShare);
         const convRate = visitors > 0 ? clicks / visitors : 0;
         return { date: p.date, visitors, clicks, convRate };
       });
