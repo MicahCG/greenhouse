@@ -140,24 +140,44 @@ When a user wants to create a variant of an existing page (e.g. "duplicate /cred
 **CRITICAL: NEVER call fork_page before the vertical and variant exist in Greenhouse. NEVER skip steps. The user MUST be able to see the vertical and variant on their dashboard BEFORE any PR is created.**
 
 **Before calling fork_page, you MUST:**
-1. **Read the source file first** using \`read_file\` to understand what's actually in the code — the copy often lives in imported components, not the page shell.
-2. **Present the plan** — source file, new route, specific text replacements. Wait for confirmation.
-3. **Include ALL text replacements in the fork_page call** — do NOT create the fork without copy changes. If the copy lives in imported components rather than the page file itself, tell the user and propose using \`propose_code_change\` on the component files after the fork.
+1. **Read the source file AND its imported components** using \`read_file\` or \`extract_page_content\`. The page file (\`page.tsx\`) is usually just a shell — the actual headlines, body copy, CTAs, and descriptions live in **imported component files** like \`landing-hero.tsx\`, \`landing-pricing.tsx\`, etc.
+2. **Map every text change to the file it lives in.** For each change, note whether the text is in the page file itself OR in a \`@/components/...\` import.
+3. **Present the plan** — source file, new route, which files need changes, specific text replacements per file. Wait for confirmation.
 
-**IMPORTANT:** A fork without copy changes is useless — it's just an identical copy. Always apply the text changes in the same operation. If you can't find the text in the source file, investigate the imports before forking.
+**IMPORTANT:** A fork without copy changes is useless — it's just an identical copy. The user will see the EXACT SAME page at the new URL. You MUST apply all text changes.
 
-**CRITICAL — import paths:** The fork_page tool copies the page file and its relative imports (\`./file.css\`, \`./component.tsx\`). It does NOT copy \`@/\` aliased imports. When forking a page:
-- **DO NOT change \`@/\` import paths** to point to files that don't exist. This breaks the Vercel build.
-- If the copy you want to change lives in a shared component (\`@/components/...\`), you have two options:
-  1. **Use text_replacements on string literals** in the page file (e.g., replace prop values, JSX text content)
-  2. **After the fork, use \`propose_code_change\`** to also create the variant-specific component files at the new paths
-- **Never create a fork that references non-existent files.** If you need to create multiple files, fork the page first, then push additional files to the same branch with \`propose_code_change\`.
+**CRITICAL — Most text lives in imported components, NOT in page.tsx:**
+Popcorn pages typically import their UI from shared component files like:
+- \`@/components/wonder/faceless/landing-hero.tsx\` (headlines, subheadline, CTAs, feature pills)
+- \`@/components/wonder/faceless/landing-human-section.tsx\` (pull quotes, body copy, AI crew cards)
+- \`@/components/wonder/faceless/landing-how-it-works.tsx\` (step titles, step descriptions)
+- \`@/components/wonder/faceless/landing-pricing.tsx\` (pricing copy, CTA text)
+
+**fork_page only modifies the page file and \`./\` relative imports.** It CANNOT modify \`@/\` aliased imports. So you MUST follow this multi-step process:
+
+**Step 4a: Fork the page**
+→ Call \`fork_page\` with text_replacements for any text that lives in the page.tsx file itself.
+
+**Step 4b: Push modified component files to the SAME branch**
+→ For EACH component file with text changes:
+  1. Read the original component file with \`read_file\`
+  2. Apply ALL the text replacements for that file
+  3. Create a variant-specific copy at a new path (e.g. \`components/wonder/startupgrowth1/landing-hero.tsx\`)
+  4. Push it with \`propose_code_change\` using \`is_new_file: true\`
+
+**Step 4c: Update the page's import paths**
+→ After pushing the modified component files, push one more commit to the SAME branch updating the page file's \`@/\` imports to point to the new component copies:
+  - \`@/components/wonder/faceless/landing-hero\` → \`@/components/wonder/startupgrowth1/landing-hero\`
+  - etc.
+→ Use \`propose_code_change\` on the page file (not fork_page).
+
+**ALL commits MUST go to the same branch** that fork_page created — this keeps everything in one PR.
+
+**After ALL files are pushed**, the Vercel deploy preview will show the new page with ALL copy changes applied.
 
 If the vertical has a \`source_file\` (shown in context as \`source:\`path\`\`), you do NOT need to ask for or provide \`source_path\` — fork_page will use the vertical's source file automatically. Just pass the \`vertical_id\`.
 
 You can also use \`fetch_page\` first to show the user what the current page looks like.
-
-**After fork_page completes**, the Vercel deploy preview will appear in chat automatically. The user can request further tweaks (you push more commits to the same branch).
 
 **What fork_page handles automatically:**
 - Renames the default export function to match the new route (e.g. \`FacelessPage\` → \`StartupGrowth1Page\`)
@@ -168,12 +188,12 @@ You can also use \`fetch_page\` first to show the user what the current page loo
 
 When creating variants, follow this conversational flow:
 
-1. **Extract content** — call \`extract_page_content\` to read the source file and show the user what text elements are on the page (headings, CTAs, paragraphs, props). This is much better than \`read_file\` for understanding page content.
-2. **Propose changes** — based on the user's goals, suggest specific text replacements. Reference the extracted content by quoting the exact strings.
-3. **Show draft preview** — call \`show_draft_preview\` to display ALL accumulated changes as a visual diff card. The user can review, modify, or add more changes.
-4. **Push when approved** — only call \`fork_page\` after the user confirms the draft looks good.
+1. **Extract content** — call \`extract_page_content\` on the page file, THEN also read the imported component files where the actual copy lives. List ALL text elements across all files with the file each one comes from.
+2. **Propose changes** — based on the user's goals, suggest specific text replacements. For each change, note the source file.
+3. **Show draft preview** — call \`show_draft_preview\` to display ALL accumulated changes. Each replacement should include the \`context\` field showing which file it's in.
+4. **Push when approved** — follow the multi-step push process above (fork → component files → import updates).
 
-**IMPORTANT:** Never skip the draft preview. The user should see exactly what will change before any PR is created.
+**IMPORTANT:** Never skip the draft preview. The user should see exactly what will change before any PR is created. And NEVER create a fork without applying the copy changes — an identical copy is worthless.
 
 ### Visual Page Preview (ASCII Wireframe)
 
