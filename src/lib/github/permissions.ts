@@ -110,16 +110,31 @@ function getExtension(path: string): string {
 // Resolve repo full name from key
 // ---------------------------------------------------------------------------
 
+/** Normalize a repo value to "owner/repo" format, stripping any URL prefix. */
+function normalizeRepo(value: string): string {
+  // Handle full GitHub URLs like "https://github.com/owner/repo"
+  try {
+    const url = new URL(value);
+    if (url.hostname === 'github.com') {
+      // pathname is "/owner/repo" or "/owner/repo/"
+      return url.pathname.replace(/^\//, '').replace(/\/$/, '');
+    }
+  } catch {
+    // Not a URL — treat as owner/repo string
+  }
+  return value;
+}
+
 export function resolveRepo(key: RepoKey): string {
   if (key === 'greenhouse') {
     const repo = process.env.GITHUB_GREENHOUSE_REPO;
     if (!repo) throw new Error('GITHUB_GREENHOUSE_REPO env var is not set');
-    return repo;
+    return normalizeRepo(repo);
   }
   if (key === 'popcorn') {
     const repo = process.env.GITHUB_POPCORN_REPO;
     if (!repo) throw new Error('GITHUB_POPCORN_REPO env var is not set');
-    return repo;
+    return normalizeRepo(repo);
   }
   throw new Error(`Unknown repo key: "${key}"`);
 }
