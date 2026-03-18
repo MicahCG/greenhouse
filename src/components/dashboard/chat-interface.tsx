@@ -459,15 +459,11 @@ function ChangeProposalCard({ proposal, onApprove, onReject }: ChangeProposalCar
 function VariantCreatedCard({ data }: { data: ChatMessage['variantCreated'] }) {
   if (!data) return null;
 
-  const isExternal = data.config?.template === 'external';
-
   return (
     <div className="mt-3 border border-green-500/20 rounded-xl bg-zinc-900/80 overflow-hidden">
       <div className="px-4 py-2.5 border-b border-white/5 flex items-center gap-2">
-        <span className="text-sm leading-none">{isExternal ? '&#8599;' : '&#10024;'}</span>
-        <span className="text-xs font-semibold text-green-400">
-          {isExternal ? 'External URL Variant Added' : 'Variant Created'}
-        </span>
+        <span className="text-sm leading-none">&#10024;</span>
+        <span className="text-xs font-semibold text-green-400">Variant Created</span>
       </div>
       <div className="p-4 space-y-3">
         <div className="flex items-center justify-between">
@@ -475,24 +471,21 @@ function VariantCreatedCard({ data }: { data: ChatMessage['variantCreated'] }) {
             <p className="text-sm font-medium text-white">{data.slug}</p>
             <p className="text-xs text-zinc-500 mt-0.5">{data.headline}</p>
           </div>
-          <a
-            href={data.liveUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs bg-green-500/20 text-green-400 border border-green-500/30 px-3 py-1.5 rounded-lg hover:bg-green-500/30 transition-colors"
-          >
-            {isExternal ? 'Open URL' : 'View Live'} &#8599;
-          </a>
+          {data.liveUrl && (
+            <a
+              href={data.liveUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs bg-green-500/20 text-green-400 border border-green-500/30 px-3 py-1.5 rounded-lg hover:bg-green-500/30 transition-colors"
+            >
+              Open URL &#8599;
+            </a>
+          )}
         </div>
-        {isExternal ? (
+        {data.liveUrl && (
           <div className="bg-zinc-800 rounded-lg px-3 py-2.5 text-xs font-mono text-blue-400 break-all">
             {data.liveUrl}
           </div>
-        ) : (
-          <>
-            <VariantPreview config={data.config as Partial<VariantConfig>} />
-            <p className="text-xs text-zinc-600 text-center">Live preview at 33% scale</p>
-          </>
         )}
       </div>
     </div>

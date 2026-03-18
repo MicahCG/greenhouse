@@ -125,6 +125,7 @@ When a user wants to create a variant of an existing page (e.g. "duplicate /cred
 
 **Step 2: Add the baseline variant** (the current page as control)
 → Call \`create_variant\` with \`variant_type: "external_url"\` pointing to the source URL.
+→ **ALWAYS use \`variant_type: "external_url"\`** — NEVER create template variants. All variants track existing Popcorn pages by URL.
 → STOP. Tell the user "The baseline variant is set up. You can see it in the vertical."
 
 **Step 3: Discuss the changes**
@@ -134,6 +135,7 @@ When a user wants to create a variant of an existing page (e.g. "duplicate /cred
 
 **Step 4: Create the PR** (ONLY after steps 1-3 are complete and user confirmed)
 → Call \`fork_page\` with the approved text replacements.
+→ fork_page automatically registers the new route as an external_url variant.
 
 **CRITICAL: NEVER call fork_page before the vertical and variant exist in Greenhouse. NEVER skip steps. The user MUST be able to see the vertical and variant on their dashboard BEFORE any PR is created.**
 

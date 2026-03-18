@@ -428,7 +428,7 @@ export const AGENT_TOOLS = [
   {
     name: 'create_variant',
     description:
-      'Create a new variant in an existing vertical. Supports two modes: (1) Template variant — a Greenhouse-hosted landing page built from config, goes live immediately. (2) External URL variant — tracks an existing page (e.g. a Popcorn app page) by URL, used when the user wants to test or track a page that already exists outside Greenhouse. Use this when the user asks to create a new variant, add a URL to track, or set up an A/B test.',
+      'Create a new variant in an existing vertical. ALWAYS use variant_type "external_url" — this registers an existing Popcorn page by URL for tracking in Greenhouse. Use this when the user asks to create a new variant, add a URL to track, or set up an A/B test. The external_url is required.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -438,8 +438,8 @@ export const AGENT_TOOLS = [
         },
         variant_type: {
           type: 'string',
-          enum: ['template', 'external_url'],
-          description: 'Type of variant. "template" for Greenhouse landing pages, "external_url" for existing pages tracked by URL. Default: "template".',
+          enum: ['external_url'],
+          description: 'Always "external_url". Registers an existing page by URL for tracking.',
         },
         hypothesis: {
           type: 'string',
@@ -1029,7 +1029,7 @@ export async function executeToolCall(
 
       case 'create_variant': {
         const verticalId = input.vertical_id as string;
-        const variantType = (input.variant_type as string) ?? 'template';
+        const variantType = (input.variant_type as string) ?? 'external_url';
         const hypothesis = input.hypothesis as string;
         const expectedImpact = input.expected_impact as string;
 
