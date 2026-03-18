@@ -541,7 +541,7 @@ export function VerticalSection({
                     {isControl && (
                       <span className="text-xs text-zinc-600 font-mono">control</span>
                     )}
-                    {variant.variant_type === 'external_url' && variant.external_url && (() => {
+                    {variant.external_url && (() => {
                       const url = variant.external_url!;
                       let displayUrl: string;
                       let fullUrl: string;
@@ -628,9 +628,9 @@ export function VerticalSection({
                       }
                     }}
                     disabled={loading === variant.id}
-                    className="text-xs text-zinc-600 hover:text-red-400 transition-colors px-1.5 py-0.5 flex-shrink-0"
+                    className="text-xs text-red-400/70 hover:text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-2 py-1 rounded-md transition-colors flex-shrink-0"
                   >
-                    {loading === variant.id ? '...' : 'Remove'}
+                    {loading === variant.id ? '...' : 'Delete'}
                   </button>
                 )}
 
