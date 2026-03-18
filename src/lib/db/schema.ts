@@ -156,3 +156,13 @@ export const notifications = pgTable('notifications', {
   read_at: timestamp('read_at'),
   created_at: timestamp('created_at').defaultNow(),
 });
+
+export const user_assignments = pgTable('user_assignments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user_id: text('user_id').notNull(),
+  vertical_id: uuid('vertical_id').notNull().references(() => verticals.id),
+  variant_id: uuid('variant_id').notNull().references(() => variants.id),
+  assigned_at: timestamp('assigned_at').defaultNow(),
+}, (table) => ({
+  user_vertical_idx: uniqueIndex('user_assignments_user_vertical_idx').on(table.user_id, table.vertical_id),
+}));
