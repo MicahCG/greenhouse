@@ -147,7 +147,7 @@ const amplitudeFetch = unstable_cache(
     const params = JSON.parse(paramsStr) as Record<string, string>;
     return amplitudeFetchRaw(path, params);
   },
-  ['amplitude-fetch-v2'],
+  ['amplitude-fetch-v3'],
   { revalidate: CACHE_TTL_SECONDS }
 );
 
