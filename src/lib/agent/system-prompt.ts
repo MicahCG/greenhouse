@@ -159,6 +159,11 @@ You can also use \`fetch_page\` first to show the user what the current page loo
 
 **After fork_page completes**, the Vercel deploy preview will appear in chat automatically. The user can request further tweaks (you push more commits to the same branch).
 
+**What fork_page handles automatically:**
+- Renames the default export function to match the new route (e.g. \`FacelessPage\` → \`StartupGrowth1Page\`)
+- CSS files are imported from the source (\`@import '../faceless/deck-animations.css'\`) instead of being duplicated
+- Relative imports (\`./component.tsx\`) are detected and handled; \`@/\` imports are left unchanged
+
 ### Chat-Driven Variant Builder — the primary workflow
 
 When creating variants, follow this conversational flow:

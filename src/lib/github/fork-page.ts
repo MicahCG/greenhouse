@@ -72,7 +72,24 @@ export async function forkPage(input: ForkPageInput): Promise<ForkPageResult> {
     }
   }
 
-  // 2b. Safety check: detect if replacements changed any @/ import paths
+  // 2b. Rename the default export to match the new route
+  // e.g. "export default function FacelessPage()" → "export default function StartupGrowth1Page()"
+  const routePascal = newRoute
+    .split(/[-_/]/)
+    .map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1))
+    .join('');
+  const newExportName = `${routePascal}Page`;
+  const defaultExportMatch = newContent.match(/export\s+default\s+function\s+(\w+)\s*\(/);
+  if (defaultExportMatch && defaultExportMatch[1] !== newExportName) {
+    const oldName = defaultExportMatch[1];
+    newContent = newContent.replace(
+      `export default function ${oldName}(`,
+      `export default function ${newExportName}(`
+    );
+    appliedReplacements.push(`Renamed default export: "${oldName}" \u2192 "${newExportName}"`);
+  }
+
+  // 2c. Safety check: detect if replacements changed any @/ import paths
   // This would break the Vercel build if the new paths don't exist
   const originalImports = new Set(
     (file.content.match(/@\/[^'"]+/g) ?? []).map((m) => m)
@@ -123,7 +140,10 @@ export async function forkPage(input: ForkPageInput): Promise<ForkPageResult> {
   const commitMessage = `[Greenhouse] Fork ${sourcePath} \u2192 ${destPath}\n\n${description}`;
   await createFile(repoFull, destPath, newContent, commitMessage, branchName);
 
-  // 5b. Copy sibling files (relative imports like CSS, local components)
+  // 5b. Handle sibling files (relative imports like CSS, local components)
+  // CSS files: create a one-line @import pointing to the original (avoids duplication)
+  // Non-CSS files: copy with text replacements applied
+  const sourceDirName = sourceDir.substring(sourceDir.lastIndexOf('/') + 1);
   const copiedSiblings: string[] = [];
   for (const relImport of relativeImports) {
     // Add common extensions if the import doesn't have one
@@ -134,17 +154,26 @@ export async function forkPage(input: ForkPageInput): Promise<ForkPageResult> {
     for (const candidate of candidates) {
       const siblingSource = `${sourceDir}/${candidate}`;
       const siblingDest = `${destDir}/${candidate}`;
+      const isCss = candidate.endsWith('.css');
+
       try {
-        const siblingFile = await getFileContent(repoFull, siblingSource);
-        // Apply text replacements to sibling files too
-        let siblingContent = siblingFile.content;
-        for (const { find, replace } of replacements) {
-          if (siblingContent.includes(find)) {
-            siblingContent = siblingContent.replaceAll(find, replace);
+        if (isCss) {
+          // CSS: import from source instead of duplicating
+          const importContent = `@import '../${sourceDirName}/${candidate}';\n`;
+          await createFile(repoFull, siblingDest, importContent, `[Greenhouse] Import ${candidate} from source for /${newRoute}`, branchName);
+          copiedSiblings.push(`${candidate} (import)`);
+        } else {
+          // Non-CSS: copy with text replacements
+          const siblingFile = await getFileContent(repoFull, siblingSource);
+          let siblingContent = siblingFile.content;
+          for (const { find, replace } of replacements) {
+            if (siblingContent.includes(find)) {
+              siblingContent = siblingContent.replaceAll(find, replace);
+            }
           }
+          await createFile(repoFull, siblingDest, siblingContent, `[Greenhouse] Copy ${candidate} for /${newRoute}`, branchName);
+          copiedSiblings.push(candidate);
         }
-        await createFile(repoFull, siblingDest, siblingContent, `[Greenhouse] Copy ${candidate} for /${newRoute}`, branchName);
-        copiedSiblings.push(candidate);
         break; // found the file, skip other extension candidates
       } catch {
         // File doesn't exist at this path — try next candidate or skip
