@@ -9,7 +9,7 @@ import {
   buildBranchName,
   buildPRBody,
 } from '@/lib/github/client';
-import { resolveRepo, isRepoKey } from '@/lib/github/permissions';
+import { resolveRepo, isRepoKey, normalizeSourcePath } from '@/lib/github/permissions';
 
 export interface ForkPageInput {
   repoKey: 'greenhouse' | 'popcorn';
@@ -42,12 +42,12 @@ export interface ForkPageResult {
 export async function forkPage(input: ForkPageInput): Promise<ForkPageResult> {
   const {
     repoKey,
-    sourcePath,
     hypothesis,
     description,
     verticalId,
     changedBy,
   } = input;
+  const sourcePath = normalizeSourcePath(input.sourcePath);
   const newRoute = input.newRoute.replace(/^\//, '');
   const replacements = input.textReplacements ?? [];
 

@@ -142,3 +142,38 @@ export function resolveRepo(key: RepoKey): string {
 export function isRepoKey(value: unknown): value is RepoKey {
   return value === 'greenhouse' || value === 'popcorn';
 }
+
+/**
+ * Normalize a source file path that may be a full GitHub URL.
+ * Strips "https://github.com/owner/repo/tree/branch/" prefix.
+ * If the path looks like a directory (no file extension), appends "/page.tsx".
+ */
+export function normalizeSourcePath(value: string): string {
+  let path = value;
+
+  // Strip full GitHub URL: https://github.com/owner/repo/tree/branch/actual/path
+  try {
+    const url = new URL(value);
+    if (url.hostname === 'github.com') {
+      // pathname: /owner/repo/tree/branch/actual/path
+      const parts = url.pathname.replace(/^\//, '').split('/');
+      // Skip owner/repo/tree/branch (4 segments)
+      if (parts.length > 4 && (parts[2] === 'tree' || parts[2] === 'blob')) {
+        path = parts.slice(4).join('/');
+      }
+    }
+  } catch {
+    // Not a URL
+  }
+
+  // Strip leading slash
+  path = path.replace(/^\//, '');
+
+  // If path looks like a directory (no file extension), append /page.tsx
+  const lastSegment = path.split('/').pop() ?? '';
+  if (!lastSegment.includes('.')) {
+    path = path.replace(/\/$/, '') + '/page.tsx';
+  }
+
+  return path;
+}

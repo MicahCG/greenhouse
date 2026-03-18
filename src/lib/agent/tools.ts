@@ -32,6 +32,7 @@ import {
   validateFileAccess,
   resolveRepo,
   isRepoKey,
+  normalizeSourcePath,
 } from '@/lib/github/permissions';
 
 // ---------------------------------------------------------------------------
@@ -1416,10 +1417,12 @@ export async function executeToolCall(
         if (!sourcePath) {
           const [vert] = await db.select().from(verticals).where(eq(verticals.id, verticalId)).limit(1);
           if (vert?.source_file) {
-            sourcePath = vert.source_file;
+            sourcePath = normalizeSourcePath(vert.source_file);
           } else {
             return JSON.stringify({ error: 'source_path is required (or set source_file on the vertical)' });
           }
+        } else {
+          sourcePath = normalizeSourcePath(sourcePath);
         }
 
         try {
