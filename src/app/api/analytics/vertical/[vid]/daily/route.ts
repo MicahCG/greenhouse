@@ -14,14 +14,8 @@ export async function GET(
 
   const { start, end } = getDateRange(30);
 
-  // Collect all paths to query: source URL + all variant URLs
+  // Collect all paths to query from variant URLs (control variant covers the source page)
   const paths: string[] = [];
-
-  if (vertical.source_url) {
-    try {
-      paths.push(new URL(vertical.source_url).pathname);
-    } catch { /* */ }
-  }
 
   const allVariants = await db.select().from(variants).where(eq(variants.vertical_id, vid));
   for (const v of allVariants) {

@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
-import { verticals } from '@/lib/db/schema';
+import { verticals, variants } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { forkPage } from '@/lib/github/fork-page';
@@ -24,7 +24,7 @@ export async function POST(
 
   const { id: verticalId } = await params;
 
-  // Load vertical and verify it has a source_file
+  // Load vertical
   const [vertical] = await db
     .select()
     .from(verticals)
@@ -35,9 +35,14 @@ export async function POST(
     return Response.json({ error: 'Vertical not found' }, { status: 404 });
   }
 
-  if (!vertical.source_file) {
+  // Find the control variant's source_file
+  const allVariants = await db.select().from(variants).where(eq(variants.vertical_id, verticalId));
+  const controlVariant = allVariants.find((v) => v.is_control) ?? allVariants[0];
+  const sourceFile = controlVariant?.source_file ?? vertical.source_file; // fallback to vertical for safety
+
+  if (!sourceFile) {
     return Response.json(
-      { error: 'This vertical has no source file configured. Set a source file path in the vertical settings first.' },
+      { error: 'No source file found. Set a source file on the control variant first.' },
       { status: 422 }
     );
   }
@@ -57,7 +62,7 @@ export async function POST(
   try {
     const result = await forkPage({
       repoKey: 'popcorn',
-      sourcePath: vertical.source_file,
+      sourcePath: sourceFile,
       newRoute: parsed.data.new_route,
       textReplacements: parsed.data.text_replacements,
       verticalId,

@@ -134,7 +134,7 @@ export function CreateVerticalModal({ open, onClose, projectId, onCreated }: Pro
 
           <div className="border-t border-white/5 pt-4">
             <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-3">Source Page (optional)</p>
-            <p className="text-xs text-zinc-600 mb-3">Link this vertical to an existing page in your codebase. This enables fork-based variant creation — duplicate the page with copy changes in one click.</p>
+            <p className="text-xs text-zinc-600 mb-3">Link this vertical to an existing page. A control variant tracking this URL will be created automatically. This enables fork-based variant creation — duplicate the page with copy changes in one click.</p>
             <div className="space-y-3">
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">Source URL</label>

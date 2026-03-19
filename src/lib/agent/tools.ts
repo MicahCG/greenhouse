@@ -987,20 +987,61 @@ export async function executeToolCall(
             slug,
             name,
             description,
-            source_url: sourceUrl,
-            source_file: sourceFile,
             traffic_split_strategy: 'equal',
           })
           .returning();
+
+        // Auto-create a control variant if sourceUrl is provided
+        let controlVariantInfo: { id: string; slug: string; external_url: string; source_file?: string } | null = null;
+        if (sourceUrl) {
+          let hostname: string;
+          try {
+            hostname = new URL(sourceUrl).hostname;
+          } catch {
+            hostname = sourceUrl;
+          }
+          const controlSlug = 'control';
+          const controlConfig = { label: hostname, external_url: sourceUrl, template: 'external' };
+          const [controlVariant] = await db
+            .insert(variants)
+            .values({
+              vertical_id: vertical.id,
+              slug: controlSlug,
+              variant_type: 'external_url',
+              external_url: sourceUrl,
+              source_file: sourceFile ?? null,
+              is_control: true,
+              config: controlConfig,
+              traffic_weight: 100,
+              version: 1,
+            })
+            .returning();
+
+          await db.insert(variant_versions).values({
+            variant_id: controlVariant.id,
+            version: 1,
+            config: controlConfig,
+            changed_by: 'agent',
+            change_description: `Auto-created control variant for ${sourceUrl}`,
+          });
+
+          controlVariantInfo = {
+            id: controlVariant.id,
+            slug: controlSlug,
+            external_url: sourceUrl,
+            source_file: sourceFile,
+          };
+        }
 
         return JSON.stringify({
           vertical_id: vertical.id,
           name: vertical.name,
           slug: vertical.slug,
-          source_url: vertical.source_url,
-          source_file: vertical.source_file,
           project_name: project.name,
-          message: `Vertical "${name}" created in ${project.name}. You can now add variants to it.`,
+          control_variant: controlVariantInfo,
+          message: controlVariantInfo
+            ? `Vertical "${name}" created in ${project.name} with control variant tracking ${sourceUrl}. You can now add challenger variants.`
+            : `Vertical "${name}" created in ${project.name}. You can now add variants to it.`,
         });
       }
 
@@ -1413,13 +1454,14 @@ export async function executeToolCall(
         let sourcePath = input.source_path as string | undefined;
         const verticalId = input.vertical_id as string;
 
-        // If source_path not provided, look up the vertical's source_file
+        // If source_path not provided, look up the control variant's source_file
         if (!sourcePath) {
-          const [vert] = await db.select().from(verticals).where(eq(verticals.id, verticalId)).limit(1);
-          if (vert?.source_file) {
-            sourcePath = normalizeSourcePath(vert.source_file);
+          const vertVariants = await db.select().from(variants).where(eq(variants.vertical_id, verticalId));
+          const controlVar = vertVariants.find((v) => v.is_control) ?? vertVariants[0];
+          if (controlVar?.source_file) {
+            sourcePath = normalizeSourcePath(controlVar.source_file);
           } else {
-            return JSON.stringify({ error: 'source_path is required (or set source_file on the vertical)' });
+            return JSON.stringify({ error: 'source_path is required (or set source_file on the control variant)' });
           }
         } else {
           sourcePath = normalizeSourcePath(sourcePath);

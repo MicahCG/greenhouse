@@ -86,8 +86,30 @@ export async function POST(
 
   const [vertical] = await db
     .insert(verticals)
-    .values({ project_id: projectId, slug, name, description, source_url, source_file, traffic_split_strategy })
+    .values({ project_id: projectId, slug, name, description, traffic_split_strategy })
     .returning();
+
+  // Auto-create a control variant if source_url is provided
+  if (source_url) {
+    let hostname: string;
+    try {
+      hostname = new URL(source_url).hostname;
+    } catch {
+      hostname = source_url;
+    }
+    const controlConfig = { label: hostname, external_url: source_url, template: 'external' };
+    await db.insert(variants).values({
+      vertical_id: vertical.id,
+      slug: 'control',
+      variant_type: 'external_url',
+      external_url: source_url,
+      source_file: source_file ?? null,
+      is_control: true,
+      config: controlConfig,
+      traffic_weight: 100,
+      version: 1,
+    });
+  }
 
   return Response.json(vertical, { status: 201 });
 }

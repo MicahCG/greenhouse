@@ -7,8 +7,6 @@ import { z } from 'zod';
 const PatchVerticalSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
-  source_url: z.string().url().nullable().optional(),
-  source_file: z.string().nullable().optional(),
   status: z.enum(['active', 'paused', 'archived']).optional(),
   traffic_split_strategy: z.enum(['equal', 'weighted', 'champion_challenger']).optional(),
 });
@@ -37,8 +35,6 @@ export async function PATCH(
   const updates: Partial<typeof verticals.$inferInsert> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
-  if (parsed.data.source_url !== undefined) updates.source_url = parsed.data.source_url;
-  if (parsed.data.source_file !== undefined) updates.source_file = parsed.data.source_file;
   if (parsed.data.status !== undefined) updates.status = parsed.data.status;
   if (parsed.data.traffic_split_strategy !== undefined) updates.traffic_split_strategy = parsed.data.traffic_split_strategy;
 

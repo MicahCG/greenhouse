@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, real, integer, timestamp, jsonb, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, real, integer, timestamp, jsonb, uniqueIndex, boolean } from 'drizzle-orm/pg-core';
 
 export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -30,8 +30,10 @@ export const variants = pgTable('variants', {
   vertical_id: uuid('vertical_id').notNull().references(() => verticals.id),
   slug: text('slug').notNull(),
   version: integer('version').notNull().default(1),
-  variant_type: text('variant_type').notNull().default('template'), // 'template' | 'external_url'
+  variant_type: text('variant_type').notNull().default('external_url'), // 'template' | 'external_url'
   external_url: text('external_url'), // target page URL for external_url variants
+  source_file: text('source_file'), // GitHub file path for fork_page (e.g. "app/(landing)/faceless/page.tsx")
+  is_control: boolean('is_control').notNull().default(false), // true for the baseline/control variant
   status: text('status').notNull().default('active'), // active | paused | winner | killed
   config: jsonb('config').notNull(),
   traffic_weight: integer('traffic_weight').notNull().default(50),

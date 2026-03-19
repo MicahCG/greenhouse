@@ -8,8 +8,6 @@ export interface AgentContext {
       id: string;
       name: string;
       slug: string;
-      source_url?: string | null;
-      source_file?: string | null;
       variantCount: number;
       visitors: number;
       convRate: number;
@@ -20,6 +18,8 @@ export interface AgentContext {
         status: string;
         traffic_weight: number;
         config: unknown;
+        is_control?: boolean;
+        source_file?: string | null;
       }>;
     }>;
   }>;
@@ -48,7 +48,8 @@ export function buildSystemPrompt(context: AgentContext): string {
                 const extUrl = typeof cfg.external_url === 'string' ? cfg.external_url : '';
                 return `      · [${va.slug}] id:${va.id} v${va.version} ${va.status} ${va.traffic_weight}%${varType === 'external_url' ? ` [EXTERNAL: ${extUrl}]` : ` — headline:"${headline}"${cta ? ` cta:"${cta}"` : ''}${template ? ` template:${template}` : ''}${heroImg ? ` hero_image:${heroImg}` : ''}`}`;
               }).join('\n');
-              const sourceInfo = v.source_file ? ` source:\`${v.source_file}\`` : '';
+              const controlVar = (v.variants ?? []).find((va) => va.is_control);
+              const sourceInfo = controlVar?.source_file ? ` source:\`${controlVar.source_file}\`` : '';
               return `    - **${v.name}** id:${v.id} (/${v.slug})${sourceInfo}: ${v.visitors.toLocaleString()} visitors, ${(v.convRate * 100).toFixed(2)}% CVR, ${v.variantCount} variants\n${variantLines}`;
             }).join('\n');
         return `- **${p.name}** [${p.id}] — focus: ${p.funnel_focus}, status: ${p.status}\n${verticalLines}`;
@@ -121,23 +122,19 @@ When a user wants to create a variant of an existing page (e.g. "duplicate /cred
 
 **Step 1: Set up the vertical** (if it doesn't exist)
 → Call \`create_vertical\` with the project_id, name, source_url, and source_file.
-→ STOP. Tell the user "I've created the vertical. You should see it on your dashboard now."
+→ This automatically creates a control variant tracking the source URL.
+→ STOP. Tell the user "I've created the vertical with a control variant. You should see it on your dashboard now."
 
-**Step 2: Add the baseline variant** (the current page as control)
-→ Call \`create_variant\` with \`variant_type: "external_url"\` pointing to the source URL.
-→ **ALWAYS use \`variant_type: "external_url"\`** — NEVER create template variants. All variants track existing Popcorn pages by URL.
-→ STOP. Tell the user "The baseline variant is set up. You can see it in the vertical."
-
-**Step 3: Discuss the changes**
+**Step 2: Discuss the changes**
 → Use \`extract_page_content\` or \`read_file\` to understand the source code.
 → Propose specific text replacements. Use \`show_draft_preview\` to show the diff.
 → STOP. Wait for the user to approve the changes.
 
-**Step 4: Create the PR** (ONLY after steps 1-3 are complete and user confirmed)
+**Step 3: Create the PR** (ONLY after steps 1-2 are complete and user confirmed)
 → Call \`fork_page\` with the approved text replacements.
 → fork_page automatically registers the new route as an external_url variant.
 
-**CRITICAL: NEVER call fork_page before the vertical and variant exist in Greenhouse. NEVER skip steps. The user MUST be able to see the vertical and variant on their dashboard BEFORE any PR is created.**
+**CRITICAL: NEVER call fork_page before the vertical exists in Greenhouse. NEVER skip steps. The user MUST be able to see the vertical and control variant on their dashboard BEFORE any PR is created.**
 
 **Before calling fork_page, you MUST:**
 1. **Read the source file AND its imported components** using \`read_file\` or \`extract_page_content\`. The page file (\`page.tsx\`) is usually just a shell — the actual headlines, body copy, CTAs, and descriptions live in **imported component files** like \`landing-hero.tsx\`, \`landing-pricing.tsx\`, etc.
@@ -155,17 +152,17 @@ Popcorn pages typically import their UI from shared component files like:
 
 **fork_page only modifies the page file and \`./\` relative imports.** It CANNOT modify \`@/\` aliased imports. So you MUST follow this multi-step process:
 
-**Step 4a: Fork the page**
+**Step 3a: Fork the page**
 → Call \`fork_page\` with text_replacements for any text that lives in the page.tsx file itself.
 
-**Step 4b: Push modified component files to the SAME branch**
+**Step 3b: Push modified component files to the SAME branch**
 → For EACH component file with text changes:
   1. Read the original component file with \`read_file\`
   2. Apply ALL the text replacements for that file
   3. Create a variant-specific copy at a new path (e.g. \`components/wonder/startupgrowth1/landing-hero.tsx\`)
   4. Push it with \`propose_code_change\` using \`is_new_file: true\`
 
-**Step 4c: Update the page's import paths**
+**Step 3c: Update the page's import paths**
 → After pushing the modified component files, push one more commit to the SAME branch updating the page file's \`@/\` imports to point to the new component copies:
   - \`@/components/wonder/faceless/landing-hero\` → \`@/components/wonder/startupgrowth1/landing-hero\`
   - etc.
@@ -175,7 +172,7 @@ Popcorn pages typically import their UI from shared component files like:
 
 **After ALL files are pushed**, the Vercel deploy preview will show the new page with ALL copy changes applied.
 
-If the vertical has a \`source_file\` (shown in context as \`source:\`path\`\`), you do NOT need to ask for or provide \`source_path\` — fork_page will use the vertical's source file automatically. Just pass the \`vertical_id\`.
+If the control variant has a \`source_file\` (shown in context as \`source:\`path\`\`), you do NOT need to ask for or provide \`source_path\` — fork_page will use the control variant's source file automatically. Just pass the \`vertical_id\`.
 
 You can also use \`fetch_page\` first to show the user what the current page looks like.
 

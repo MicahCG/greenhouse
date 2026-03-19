@@ -142,8 +142,6 @@ export async function POST(request: Request) {
               id: v.id,
               name: v.name,
               slug: v.slug,
-              source_url: v.source_url,
-              source_file: v.source_file,
               variantCount: allVariants.length,
               visitors: 0,
               convRate: 0,
@@ -154,6 +152,8 @@ export async function POST(request: Request) {
                 status: va.status,
                 traffic_weight: va.traffic_weight,
                 config: va.config,
+                is_control: va.is_control,
+                source_file: va.source_file,
               })),
             };
           })

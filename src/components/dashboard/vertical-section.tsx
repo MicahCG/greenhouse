@@ -29,6 +29,8 @@ interface VariantRow {
   traffic_weight: number;
   variant_type?: string;
   external_url?: string | null;
+  source_file?: string | null;
+  is_control?: boolean;
 }
 
 interface VerticalSectionProps {
@@ -39,15 +41,11 @@ interface VerticalSectionProps {
     slug: string;
     status: string;
     traffic_split_strategy: string;
-    source_url?: string | null;
-    source_file?: string | null;
   };
   variants: VariantRow[];
   metricsMap: Record<string, VariantMetricsData>;
   controlSlug: string;
   funnelFocus: string;
-  sourcePageVisitors?: number;
-  sourcePageConversions?: number;
 }
 
 const SPLIT_STRATEGIES = [
@@ -89,8 +87,6 @@ export function VerticalSection({
   metricsMap,
   controlSlug,
   funnelFocus,
-  sourcePageVisitors = 0,
-  sourcePageConversions = 0,
 }: VerticalSectionProps) {
   const [variantModalOpen, setVariantModalOpen] = useState(false);
   const [editingVariant, setEditingVariant] = useState<VariantRow | undefined>();
@@ -98,14 +94,9 @@ export function VerticalSection({
   const [menuOpen, setMenuOpen] = useState(false);
   const [variantMenuOpen, setVariantMenuOpen] = useState<string | null>(null);
   const [renamingName, setRenamingName] = useState<string | null>(null);
-  const [editingSource, setEditingSource] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [dailyData, setDailyData] = useState<Array<{ date: string; visitors: number }> | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
-  const [editSourceUrl, setEditSourceUrl] = useState(vertical.source_url ?? '');
-  const [editSourceFile, setEditSourceFile] = useState(vertical.source_file ?? '');
-  const [currentSourceUrl, setCurrentSourceUrl] = useState(vertical.source_url);
-  const [currentSourceFile, setCurrentSourceFile] = useState(vertical.source_file);
   const [currentStrategy, setCurrentStrategy] = useState(vertical.traffic_split_strategy);
   const [verticalName, setVerticalName] = useState(vertical.name);
   const [verticalStatus, setVerticalStatus] = useState(vertical.status);
@@ -118,12 +109,15 @@ export function VerticalSection({
 
   const labels = FUNNEL_LABELS[funnelFocus] ?? FUNNEL_LABELS.acquisition;
 
-  // Vertical-level totals across non-killed variants + source page
+  // Derive control variant info from variants prop
+  const controlVariant = variants.find((v) => v.is_control) ?? variants[0];
+  const controlSourceUrl = controlVariant?.external_url ?? null;
+  const controlSourceFile = controlVariant?.source_file ?? null;
+
+  // Vertical-level totals across non-killed variants
   const liveVariants = variants.filter((v) => (variantStatuses[v.id] ?? v.status) !== 'killed');
-  const variantVisitors = liveVariants.reduce((sum, v) => sum + (metricsMap[v.id]?.visitors ?? 0), 0);
-  const variantClicks = liveVariants.reduce((sum, v) => sum + (metricsMap[v.id]?.clicks ?? 0), 0);
-  const totalVisitors = variantVisitors + sourcePageVisitors;
-  const totalClicks = variantClicks + sourcePageConversions;
+  const totalVisitors = liveVariants.reduce((sum, v) => sum + (metricsMap[v.id]?.visitors ?? 0), 0);
+  const totalClicks = liveVariants.reduce((sum, v) => sum + (metricsMap[v.id]?.clicks ?? 0), 0);
   const overallConvRate = totalVisitors > 0 ? totalClicks / totalVisitors : 0;
 
   function openNew() {
@@ -198,28 +192,6 @@ export function VerticalSection({
     } finally {
       setLoading(null);
       setRenamingName(null);
-    }
-  }
-
-  async function saveSource() {
-    setLoading('source');
-    try {
-      const res = await fetch(`/api/verticals/${vertical.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source_url: editSourceUrl || null,
-          source_file: editSourceFile || null,
-        }),
-      });
-      if (res.ok) {
-        setCurrentSourceUrl(editSourceUrl || null);
-        setCurrentSourceFile(editSourceFile || null);
-        setEditingSource(false);
-        router.refresh();
-      }
-    } finally {
-      setLoading(null);
     }
   }
 
@@ -300,18 +272,18 @@ export function VerticalSection({
             <>
               <h2 className="font-semibold">{verticalName}</h2>
               <p className="text-zinc-500 text-xs mt-0.5">/{vertical.slug}</p>
-              {currentSourceUrl && (
+              {controlSourceUrl && (
                 <a
-                  href={currentSourceUrl}
+                  href={controlSourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-blue-400/60 hover:text-blue-400 transition-colors mt-0.5 truncate max-w-xs block"
                 >
-                  {currentSourceUrl} {'\u2197'}
+                  {controlSourceUrl} {'\u2197'}
                 </a>
               )}
-              {currentSourceFile && !currentSourceUrl && (
-                <p className="text-xs text-zinc-600 font-mono mt-0.5">{currentSourceFile}</p>
+              {controlSourceFile && !controlSourceUrl && (
+                <p className="text-xs text-zinc-600 font-mono mt-0.5">{controlSourceFile}</p>
               )}
             </>
           )}
@@ -383,12 +355,6 @@ export function VerticalSection({
                   Rename
                 </button>
                 <button
-                  onClick={() => { setMenuOpen(false); setEditingSource(true); }}
-                  className="w-full text-left px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/5 transition-colors border-t border-white/5"
-                >
-                  {currentSourceFile ? 'Edit Source' : 'Set Source Page'}
-                </button>
-                <button
                   onClick={() => {
                     setMenuOpen(false);
                     setShowStats((v) => !v);
@@ -426,48 +392,6 @@ export function VerticalSection({
           </div>
         </div>
       </div>
-
-      {/* Source editing panel */}
-      {editingSource && (
-        <div className="px-5 py-4 border-b border-white/5 bg-zinc-800/30 space-y-3">
-          <p className="text-xs text-zinc-400 font-medium">Source Page Settings</p>
-          <div>
-            <label className="block text-xs text-zinc-500 mb-1">Source URL</label>
-            <input
-              type="url"
-              value={editSourceUrl}
-              onChange={(e) => setEditSourceUrl(e.target.value)}
-              placeholder="https://www.popcorn.co/credits"
-              className="bg-zinc-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 w-full"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-zinc-500 mb-1">Source File (GitHub path)</label>
-            <input
-              type="text"
-              value={editSourceFile}
-              onChange={(e) => setEditSourceFile(e.target.value)}
-              placeholder="app/(sidebar)/credits/page.tsx"
-              className="bg-zinc-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 w-full font-mono text-xs"
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={saveSource}
-              disabled={loading === 'source'}
-              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors"
-            >
-              {loading === 'source' ? 'Saving...' : 'Save'}
-            </button>
-            <button
-              onClick={() => setEditingSource(false)}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-3 py-1.5"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Performance stats panel */}
       {showStats && (
@@ -550,9 +474,9 @@ export function VerticalSection({
                         displayUrl = u.hostname + u.pathname.replace(/\/$/, '');
                         fullUrl = url;
                       } catch {
-                        if (url.startsWith('/') && currentSourceUrl) {
+                        if (url.startsWith('/') && controlSourceUrl) {
                           try {
-                            const base = new URL(currentSourceUrl);
+                            const base = new URL(controlSourceUrl);
                             displayUrl = base.hostname + url;
                             fullUrl = base.origin + url;
                           } catch {
@@ -771,8 +695,8 @@ export function VerticalSection({
         verticalId={vertical.id}
         projectId={projectId}
         trafficSplitStrategy={currentStrategy}
-        sourceFile={currentSourceFile}
-        sourceUrl={currentSourceUrl}
+        sourceFile={controlSourceFile}
+        sourceUrl={controlSourceUrl}
         variant={editingVariant}
         onSaved={handleSaved}
       />

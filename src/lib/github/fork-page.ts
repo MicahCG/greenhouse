@@ -204,13 +204,24 @@ export async function forkPage(input: ForkPageInput): Promise<ForkPageResult> {
     throw new Error(`Vertical not found: ${verticalId}. PR was still created at ${prResult.url}`);
   }
 
-  // 8. Register variant — derive domain from the vertical's source_url or env
+  // 8. Register variant — derive domain from the control variant's external_url or env
   let domain = process.env.NEXT_PUBLIC_POPCORN_URL ?? '';
-  if (!domain && vertical.source_url) {
-    try {
-      const u = new URL(vertical.source_url);
-      domain = u.origin; // e.g. "https://www.popcorn.co"
-    } catch { /* ignore */ }
+  if (!domain) {
+    const vertVariants = await db.select().from(variants).where(eq(variants.vertical_id, verticalId));
+    const controlVar = vertVariants.find((v) => v.is_control) ?? vertVariants[0];
+    if (controlVar?.external_url) {
+      try {
+        const u = new URL(controlVar.external_url);
+        domain = u.origin; // e.g. "https://www.popcorn.co"
+      } catch { /* ignore */ }
+    }
+    // Fallback to vertical.source_url for safety during migration
+    if (!domain && vertical.source_url) {
+      try {
+        const u = new URL(vertical.source_url);
+        domain = u.origin;
+      } catch { /* ignore */ }
+    }
   }
   const deployedUrl = domain ? `${domain}/${newRoute}` : `/${newRoute}`;
 
