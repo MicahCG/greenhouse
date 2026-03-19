@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { verticals, variants, variant_versions, agent_changes } from '@/lib/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { rebalanceWeights } from '@/lib/experiments/traffic';
 
 const PatchVerticalSchema = z.object({
   name: z.string().min(1).optional(),
@@ -40,6 +41,11 @@ export async function PATCH(
 
   const [updated] = await db.update(verticals).set(updates).where(eq(verticals.id, id)).returning();
   if (!updated) return Response.json({ error: 'Not found' }, { status: 404 });
+
+  // Rebalance weights when strategy changes (equal or champion_challenger)
+  if (parsed.data.traffic_split_strategy && parsed.data.traffic_split_strategy !== 'weighted') {
+    await rebalanceWeights(id);
+  }
 
   return Response.json(updated);
 }

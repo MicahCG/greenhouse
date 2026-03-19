@@ -151,6 +151,25 @@ export function VerticalSection({
       });
       if (res.ok) {
         setCurrentStrategy(strategy);
+        // Reset local weights — the server rebalanced them
+        if (strategy !== 'weighted') {
+          const activeCount = liveVariants.length || 1;
+          const equalWeight = Math.floor(100 / activeCount);
+          const newWeights: Record<string, number> = {};
+          liveVariants.forEach((v, i) => {
+            newWeights[v.id] = i === activeCount - 1 ? equalWeight + (100 - equalWeight * activeCount) : equalWeight;
+          });
+          if (strategy === 'champion_challenger' && liveVariants.length > 1) {
+            const ctrlId = controlVariant?.id ?? liveVariants[0]?.id;
+            const rest = liveVariants.filter((v) => v.id !== ctrlId);
+            const challengerW = rest.length > 0 ? Math.floor(20 / rest.length) : 0;
+            liveVariants.forEach((v) => {
+              newWeights[v.id] = v.id === ctrlId ? 80 : challengerW;
+            });
+          }
+          setWeights((prev) => ({ ...prev, ...newWeights }));
+          setWeightsDirty(false);
+        }
         router.refresh();
       }
     } finally {
