@@ -106,6 +106,7 @@ export default async function ProjectPage({ params }: PageProps) {
           <div className="flex-1" />
           <ProjectSettings
             projectId={project.id}
+            currentName={project.name}
             currentEvents={project.tracked_events ?? []}
             currentDescription={project.description ?? ''}
             currentThreshold={project.significance_threshold}

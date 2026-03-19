@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 
 interface ProjectSettingsProps {
   projectId: string;
+  currentName: string;
   currentEvents: string[];
   currentDescription: string;
   currentThreshold: number;
@@ -20,8 +21,9 @@ const COMMON_EVENTS = [
   'lp_cta_clicked',
 ];
 
-export function ProjectSettings({ projectId, currentEvents, currentDescription, currentThreshold }: ProjectSettingsProps) {
+export function ProjectSettings({ projectId, currentName, currentEvents, currentDescription, currentThreshold }: ProjectSettingsProps) {
   const [open, setOpen] = useState(false);
+  const [name, setName] = useState(currentName);
   const [startEvent, setStartEvent] = useState(currentEvents[0] ?? '');
   const [endEvent, setEndEvent] = useState(currentEvents[1] ?? '');
   const [description, setDescription] = useState(currentDescription);
@@ -33,6 +35,7 @@ export function ProjectSettings({ projectId, currentEvents, currentDescription, 
     setSaving(true);
     try {
       const body: Record<string, unknown> = {};
+      if (name !== currentName) body.name = name;
       if (startEvent && endEvent) body.tracked_events = [startEvent, endEvent];
       if (description !== currentDescription) body.description = description;
       if (threshold !== currentThreshold) body.significance_threshold = threshold;
@@ -70,6 +73,16 @@ export function ProjectSettings({ projectId, currentEvents, currentDescription, 
         <button onClick={() => setOpen(false)} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
           Cancel
         </button>
+      </div>
+
+      <div>
+        <label className="block text-xs text-zinc-500 mb-1">Project Name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="bg-zinc-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30 w-full"
+        />
       </div>
 
       <div>
