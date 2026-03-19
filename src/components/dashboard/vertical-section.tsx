@@ -105,6 +105,10 @@ export function VerticalSection({
     Object.fromEntries(variants.map((v) => [v.id, v.status]))
   );
   const [loading, setLoading] = useState<string | null>(null);
+  const [weights, setWeights] = useState<Record<string, number>>(
+    Object.fromEntries(variants.map((v) => [v.id, v.traffic_weight]))
+  );
+  const [weightsDirty, setWeightsDirty] = useState(false);
   const router = useRouter();
 
   const labels = FUNNEL_LABELS[funnelFocus] ?? FUNNEL_LABELS.acquisition;
@@ -243,6 +247,35 @@ export function VerticalSection({
       setLoading(null);
     }
   }
+
+  async function saveWeights() {
+    setLoading('weights');
+    try {
+      // Save each variant's weight
+      await Promise.all(
+        Object.entries(weights).map(([variantId, weight]) =>
+          fetch(`/api/variants/${variantId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ traffic_weight: weight }),
+          })
+        )
+      );
+      setWeightsDirty(false);
+      router.refresh();
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  function updateWeight(variantId: string, value: number) {
+    setWeights((prev) => ({ ...prev, [variantId]: value }));
+    setWeightsDirty(true);
+  }
+
+  const totalWeight = Object.entries(weights)
+    .filter(([id]) => (variantStatuses[id] ?? 'active') !== 'killed')
+    .reduce((sum, [, w]) => sum + w, 0);
 
   const isArchived = verticalStatus === 'archived';
 
@@ -448,7 +481,21 @@ export function VerticalSection({
                     <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${variantStatusColors[status] ?? ''}`}>
                       {status}
                     </span>
-                    <span className="text-zinc-700 text-xs">{variant.traffic_weight}%</span>
+                    {currentStrategy === 'weighted' && !isKilled ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={weights[variant.id] ?? variant.traffic_weight}
+                          onChange={(e) => updateWeight(variant.id, Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                          className="w-10 bg-zinc-800 border border-white/10 rounded px-1.5 py-0.5 text-xs text-white text-center focus:outline-none focus:border-amber-500/50 tabular-nums"
+                        />
+                        <span className="text-zinc-700 text-xs">%</span>
+                      </div>
+                    ) : (
+                      <span className="text-zinc-700 text-xs">{weights[variant.id] ?? variant.traffic_weight}%</span>
+                    )}
                     {isControl && (
                       <span className="text-[10px] font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded">control</span>
                     )}
@@ -634,6 +681,23 @@ export function VerticalSection({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Weight save bar */}
+      {currentStrategy === 'weighted' && weightsDirty && (
+        <div className="px-5 py-2.5 bg-amber-500/10 border-t border-amber-500/20 flex items-center justify-between">
+          <div className="text-xs text-amber-400">
+            Total: <span className={`font-semibold ${totalWeight === 100 ? 'text-green-400' : 'text-red-400'}`}>{totalWeight}%</span>
+            {totalWeight !== 100 && <span className="text-red-400/70 ml-2">(should equal 100%)</span>}
+          </div>
+          <button
+            onClick={saveWeights}
+            disabled={loading === 'weights'}
+            className="text-xs bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold px-3 py-1.5 rounded-lg transition-colors"
+          >
+            {loading === 'weights' ? 'Saving...' : 'Save Weights'}
+          </button>
         </div>
       )}
 
