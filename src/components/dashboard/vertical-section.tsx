@@ -489,9 +489,9 @@ export function VerticalSection({
                           max={100}
                           value={weights[variant.id] ?? variant.traffic_weight}
                           onChange={(e) => updateWeight(variant.id, Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
-                          className="w-10 bg-zinc-800 border border-white/10 rounded px-1.5 py-0.5 text-xs text-white text-center focus:outline-none focus:border-amber-500/50 tabular-nums"
+                          className="w-12 bg-zinc-800 border border-amber-500/30 rounded-md px-2 py-1 text-sm font-medium text-amber-400 text-center focus:outline-none focus:border-amber-500/60 tabular-nums"
                         />
-                        <span className="text-zinc-700 text-xs">%</span>
+                        <span className="text-zinc-500 text-xs">%</span>
                       </div>
                     ) : (
                       <span className="text-zinc-700 text-xs">{weights[variant.id] ?? variant.traffic_weight}%</span>
