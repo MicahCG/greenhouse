@@ -1164,6 +1164,11 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
               }
             }
 
+            if (toolName === 'create_vertical') {
+              // Notify dashboard to refresh so the new vertical appears immediately
+              notifyDataChanged();
+            }
+
             if (toolName === 'fetch_page') {
               try {
                 const parsed = JSON.parse(result) as {
@@ -1172,14 +1177,38 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
                   headings?: Array<{ level: number; text: string }>;
                 };
                 if (parsed.url) {
+                  // Skip iframe for popcorn.co URLs — they require auth and break.
+                  // Show headings summary only; the agent should generate a wireframe.
+                  const isPopcornApp = (() => {
+                    try {
+                      const u = new URL(parsed.url!);
+                      return u.hostname.includes('popcorn.co') && !u.pathname.startsWith('/lp/');
+                    } catch { return false; }
+                  })();
+
+                  if (!isPopcornApp) {
+                    setMessages((prev) =>
+                      updateLastMessage(prev, (msg) => ({
+                        ...msg,
+                        pagePreview: {
+                          url: parsed.url!,
+                          title: parsed.title ?? '',
+                          headings: (parsed.headings ?? []).map((h) => h.text),
+                        },
+                        toolCalls: (msg.toolCalls ?? []).map((tc) =>
+                          tc.tool === toolName && !tc.done
+                            ? { ...tc, result, done: true }
+                            : tc
+                        ),
+                      }))
+                    );
+                    continue;
+                  }
+                  // For popcorn.co URLs: just mark the tool as done (no iframe),
+                  // the agent's text response + wireframe will show the content
                   setMessages((prev) =>
                     updateLastMessage(prev, (msg) => ({
                       ...msg,
-                      pagePreview: {
-                        url: parsed.url!,
-                        title: parsed.title ?? '',
-                        headings: (parsed.headings ?? []).map((h) => h.text),
-                      },
                       toolCalls: (msg.toolCalls ?? []).map((tc) =>
                         tc.tool === toolName && !tc.done
                           ? { ...tc, result, done: true }
