@@ -1170,57 +1170,19 @@ export function ChatInterface({ projectId, initialPrompt, compact }: Props) {
             }
 
             if (toolName === 'fetch_page') {
-              try {
-                const parsed = JSON.parse(result) as {
-                  url?: string;
-                  title?: string;
-                  headings?: Array<{ level: number; text: string }>;
-                };
-                if (parsed.url) {
-                  // Skip iframe for popcorn.co URLs — they require auth and break.
-                  // Show headings summary only; the agent should generate a wireframe.
-                  const isPopcornApp = (() => {
-                    try {
-                      const u = new URL(parsed.url!);
-                      return u.hostname.includes('popcorn.co') && !u.pathname.startsWith('/lp/');
-                    } catch { return false; }
-                  })();
-
-                  if (!isPopcornApp) {
-                    setMessages((prev) =>
-                      updateLastMessage(prev, (msg) => ({
-                        ...msg,
-                        pagePreview: {
-                          url: parsed.url!,
-                          title: parsed.title ?? '',
-                          headings: (parsed.headings ?? []).map((h) => h.text),
-                        },
-                        toolCalls: (msg.toolCalls ?? []).map((tc) =>
-                          tc.tool === toolName && !tc.done
-                            ? { ...tc, result, done: true }
-                            : tc
-                        ),
-                      }))
-                    );
-                    continue;
-                  }
-                  // For popcorn.co URLs: just mark the tool as done (no iframe),
-                  // the agent's text response + wireframe will show the content
-                  setMessages((prev) =>
-                    updateLastMessage(prev, (msg) => ({
-                      ...msg,
-                      toolCalls: (msg.toolCalls ?? []).map((tc) =>
-                        tc.tool === toolName && !tc.done
-                          ? { ...tc, result, done: true }
-                          : tc
-                      ),
-                    }))
-                  );
-                  continue;
-                }
-              } catch {
-                // fall through
-              }
+              // Never show iframe — all previews use ASCII wireframe format.
+              // Just mark the tool as done; the agent's text + wireframe will show content.
+              setMessages((prev) =>
+                updateLastMessage(prev, (msg) => ({
+                  ...msg,
+                  toolCalls: (msg.toolCalls ?? []).map((tc) =>
+                    tc.tool === toolName && !tc.done
+                      ? { ...tc, result, done: true }
+                      : tc
+                  ),
+                }))
+              );
+              continue;
             }
 
             if (toolName === 'propose_variant_change') {

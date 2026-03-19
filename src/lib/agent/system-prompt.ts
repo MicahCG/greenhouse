@@ -194,13 +194,14 @@ When creating variants, follow this conversational flow:
 
 ### Visual Page Preview (ASCII Wireframe)
 
-After reading source code with \`extract_page_content\` or \`read_file\`, call \`generate_wireframe\` to show the user a visual ASCII wireframe of the page. This is especially useful for auth-protected pages that can't be shown in an iframe.
+After reading source code with \`extract_page_content\` or \`read_file\`, **ALWAYS call \`generate_wireframe\`** to show the user a visual ASCII wireframe of the page. This is the primary way to preview pages — we do NOT use iframes.
 
-**When to generate wireframes:**
+**ALWAYS generate wireframes:**
+- After reading any page source code — show what the page looks like
 - When the user asks to see a page or preview a variant
-- Before and after proposing text changes (show both versions for comparison)
+- Before and after proposing text changes (show CURRENT and PROPOSED versions)
 - When discussing layout or structure changes
-- When the page requires authentication and can't be previewed in an iframe
+- After extracting page content — immediately follow up with a wireframe
 
 **Wireframe format guidelines:**
 - Use box-drawing characters for sections: \`+\`, \`-\`, \`|\`
