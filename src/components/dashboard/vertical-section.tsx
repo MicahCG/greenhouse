@@ -272,19 +272,6 @@ export function VerticalSection({
             <>
               <h2 className="font-semibold">{verticalName}</h2>
               <p className="text-zinc-500 text-xs mt-0.5">/{vertical.slug}</p>
-              {controlSourceUrl && (
-                <a
-                  href={controlSourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-blue-400/60 hover:text-blue-400 transition-colors mt-0.5 truncate max-w-xs block"
-                >
-                  {controlSourceUrl} {'\u2197'}
-                </a>
-              )}
-              {controlSourceFile && !controlSourceUrl && (
-                <p className="text-xs text-zinc-600 font-mono mt-0.5">{controlSourceFile}</p>
-              )}
             </>
           )}
         </div>
@@ -445,7 +432,7 @@ export function VerticalSection({
           {variants.map((variant) => {
             const status = variantStatuses[variant.id] ?? variant.status;
             const isKilled = status === 'killed';
-            const isControl = variant.slug === controlSlug;
+            const isControl = variant.is_control ?? variant.slug === controlSlug;
             const metrics = metricsMap[variant.id];
 
             return (
@@ -463,7 +450,7 @@ export function VerticalSection({
                     </span>
                     <span className="text-zinc-700 text-xs">{variant.traffic_weight}%</span>
                     {isControl && (
-                      <span className="text-xs text-zinc-600 font-mono">control</span>
+                      <span className="text-[10px] font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded">control</span>
                     )}
                     {variant.external_url && (() => {
                       const url = variant.external_url!;
