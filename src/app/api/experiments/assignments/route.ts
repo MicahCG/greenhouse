@@ -14,6 +14,7 @@ const QuerySchema = z.object({
  *
  * Returns variant assignments for a Popcorn user across active experiments.
  * Creates new assignments deterministically for verticals the user hasn't been assigned to yet.
+ * Handles stale assignments (killed/paused variants) by reassigning to active variants.
  * Auth: Bearer token via GREENHOUSE_API_KEY.
  */
 export async function GET(request: Request) {
@@ -47,6 +48,7 @@ export async function GET(request: Request) {
       assigned_at: user_assignments.assigned_at,
       vertical_slug: verticals.slug,
       vertical_name: verticals.name,
+      config_version: verticals.config_version,
       variant_slug: variants.slug,
       variant_type: variants.variant_type,
       variant_status: variants.status,
@@ -99,6 +101,7 @@ export async function GET(request: Request) {
       assigned_at: new Date(),
       vertical_slug: vertical.slug,
       vertical_name: vertical.name,
+      config_version: vertical.config_version,
       variant_slug: chosenFull.slug,
       variant_type: chosenFull.variant_type,
       variant_status: chosenFull.status,
@@ -107,10 +110,9 @@ export async function GET(request: Request) {
     });
   }
 
-  // 6. Combine existing + new, filter out killed/paused variant assignments
+  // 6. Combine existing + new, handle killed/paused variant assignments
   const allRows = [...existingRows, ...newAssignments];
 
-  // If a user's assigned variant was killed, reassign them
   const finalAssignments: Record<string, {
     vertical_id: string;
     vertical_slug: string;
@@ -118,6 +120,7 @@ export async function GET(request: Request) {
     variant_slug: string;
     url: string | null;
     traffic_weight: number;
+    config_version: number;
     assigned_at: string | null;
   }> = {};
 
@@ -125,8 +128,8 @@ export async function GET(request: Request) {
     // Skip if filtered by slug and not in the list
     if (slugFilter && !slugFilter.includes(row.vertical_slug)) continue;
 
-    if (row.variant_status === 'killed') {
-      // Variant was killed — reassign
+    if (row.variant_status === 'killed' || row.variant_status === 'paused') {
+      // Variant was killed or paused — reassign to an active variant
       const activeVariants = await db
         .select()
         .from(variants)
@@ -155,6 +158,7 @@ export async function GET(request: Request) {
         variant_slug: chosenFull.slug,
         url: chosenFull.external_url,
         traffic_weight: chosenFull.traffic_weight,
+        config_version: row.config_version,
         assigned_at: new Date().toISOString(),
       };
     } else {
@@ -165,6 +169,7 @@ export async function GET(request: Request) {
         variant_slug: row.variant_slug,
         url: row.external_url,
         traffic_weight: row.traffic_weight,
+        config_version: row.config_version,
         assigned_at: row.assigned_at?.toISOString() ?? null,
       };
     }

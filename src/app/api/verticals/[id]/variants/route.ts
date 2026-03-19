@@ -4,7 +4,7 @@ import { variants, verticals, variant_versions } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { VariantConfigSchema } from '@/lib/types/variant-config';
-import { rebalanceWeights } from '@/lib/experiments/traffic';
+import { rebalanceWeights, incrementConfigVersion } from '@/lib/experiments/traffic';
 
 const VARIANT_SLUGS = ['variant-a', 'variant-b', 'variant-c', 'variant-d', 'variant-e', 'variant-f'];
 
@@ -129,6 +129,9 @@ export async function POST(
   if (vertical.traffic_split_strategy === 'equal' || vertical.traffic_split_strategy === 'champion_challenger') {
     await rebalanceWeights(verticalId);
   }
+
+  // New variant affects routing — increment config_version
+  await incrementConfigVersion(verticalId);
 
   return Response.json(variant, { status: 201 });
 }

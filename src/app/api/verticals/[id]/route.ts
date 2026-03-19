@@ -1,9 +1,9 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
-import { verticals, variants, variant_versions, agent_changes } from '@/lib/db/schema';
+import { verticals, variants, variant_versions, agent_changes, user_assignments } from '@/lib/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
-import { rebalanceWeights } from '@/lib/experiments/traffic';
+import { rebalanceWeights, incrementConfigVersion } from '@/lib/experiments/traffic';
 
 const PatchVerticalSchema = z.object({
   name: z.string().min(1).optional(),
@@ -47,6 +47,11 @@ export async function PATCH(
     await rebalanceWeights(id);
   }
 
+  // Strategy change affects traffic routing — increment config_version
+  if (parsed.data.traffic_split_strategy) {
+    await incrementConfigVersion(id);
+  }
+
   return Response.json(updated);
 }
 
@@ -62,6 +67,9 @@ export async function DELETE(
   // Delete dependent records first (no cascade in schema)
   const variantRows = await db.select({ id: variants.id }).from(variants).where(eq(variants.vertical_id, id));
   const variantIds = variantRows.map((v) => v.id);
+
+  // Delete user_assignments for this vertical
+  await db.delete(user_assignments).where(eq(user_assignments.vertical_id, id));
 
   if (variantIds.length > 0) {
     // Delete variant_versions and agent_changes that reference these variants

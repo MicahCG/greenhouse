@@ -1,9 +1,13 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
-import { variants } from '@/lib/db/schema';
+import { variants, verticals } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { rebalanceWeights } from '@/lib/experiments/traffic';
+import {
+  rebalanceWeights,
+  incrementConfigVersion,
+  deleteVariantAssignments,
+} from '@/lib/experiments/traffic';
 
 const StatusSchema = z.object({
   status: z.enum(['active', 'paused', 'killed', 'winner']),
@@ -36,7 +40,9 @@ export async function PATCH(
   if (!existing) return Response.json({ error: 'Not found' }, { status: 404 });
 
   const { status, pause_others } = parsed.data;
+  const previousStatus = existing.status;
 
+  // Update the variant status
   await db
     .update(variants)
     .set({ status, updated_at: new Date() })
@@ -58,8 +64,27 @@ export async function PATCH(
     );
   }
 
+  // --- Lifecycle-specific actions ---
+
+  if (status === 'killed') {
+    // Delete all user_assignments pointing to this variant so users get reassigned
+    await deleteVariantAssignments(id);
+  }
+
+  // Paused: do NOT delete assignments (preserve for reactivation).
+  // Users will get reassigned when Popcorn detects config_version changed.
+
+  // Reactivated: users with preserved assignments will get this variant back
+  // when they refetch. New users start getting assigned via updated weights.
+
   // Rebalance weights after any status change
   await rebalanceWeights(existing.vertical_id);
+
+  // Increment config_version for structural changes (status affects traffic routing)
+  // Only increment when the status actually changed
+  if (status !== previousStatus) {
+    await incrementConfigVersion(existing.vertical_id);
+  }
 
   const [updated] = await db.select().from(variants).where(eq(variants.id, id)).limit(1);
   return Response.json(updated);

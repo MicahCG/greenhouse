@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
-import { variants, verticals } from '@/lib/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { variants, verticals, user_assignments } from '@/lib/db/schema';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 
 /**
  * Rebalances traffic weights for all active variants in a vertical,
@@ -71,4 +71,44 @@ export async function rebalanceWeights(verticalId: string): Promise<void> {
         .where(eq(variants.id, v.id))
     )
   );
+}
+
+/**
+ * Increments the config_version for a vertical. Call this whenever
+ * the experiment configuration changes (variant added/killed/paused/reactivated,
+ * traffic weights changed). Popcorn polls config_version to know when to
+ * invalidate cached assignments.
+ */
+export async function incrementConfigVersion(verticalId: string): Promise<number> {
+  const [updated] = await db
+    .update(verticals)
+    .set({ config_version: sql`${verticals.config_version} + 1` })
+    .where(eq(verticals.id, verticalId))
+    .returning({ config_version: verticals.config_version });
+  return updated?.config_version ?? 1;
+}
+
+/**
+ * Deletes all user_assignments for a given vertical.
+ * Used when a variant is killed (to force reassignment) or when manually
+ * resetting assignments via the dashboard.
+ */
+export async function deleteVerticalAssignments(verticalId: string): Promise<number> {
+  const deleted = await db
+    .delete(user_assignments)
+    .where(eq(user_assignments.vertical_id, verticalId))
+    .returning();
+  return deleted.length;
+}
+
+/**
+ * Deletes all user_assignments pointing to a specific variant.
+ * Used when a variant is killed so those users get reassigned.
+ */
+export async function deleteVariantAssignments(variantId: string): Promise<number> {
+  const deleted = await db
+    .delete(user_assignments)
+    .where(eq(user_assignments.variant_id, variantId))
+    .returning();
+  return deleted.length;
 }

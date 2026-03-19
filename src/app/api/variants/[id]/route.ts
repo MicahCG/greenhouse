@@ -1,9 +1,10 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
-import { variants, variant_versions, agent_changes } from '@/lib/db/schema';
+import { variants, variant_versions, agent_changes, user_assignments } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { VariantConfigSchema } from '@/lib/types/variant-config';
+import { incrementConfigVersion } from '@/lib/experiments/traffic';
 
 const PatchTemplateSchema = z.object({
   config: VariantConfigSchema.optional(),
@@ -102,6 +103,12 @@ export async function PATCH(
     updates.updated_at = new Date();
 
     const [updated] = await db.update(variants).set(updates).where(eq(variants.id, id)).returning();
+
+    // Weight change affects traffic routing — increment config_version
+    if (parsed.data.traffic_weight !== undefined && parsed.data.traffic_weight !== existing.traffic_weight) {
+      await incrementConfigVersion(existing.vertical_id);
+    }
+
     return Response.json(updated);
   }
 
@@ -136,6 +143,11 @@ export async function PATCH(
 
   const [updated] = await db.update(variants).set(updates).where(eq(variants.id, id)).returning();
 
+  // Weight change affects traffic routing — increment config_version
+  if (parsed.data.traffic_weight !== undefined && parsed.data.traffic_weight !== existing.traffic_weight) {
+    await incrementConfigVersion(existing.vertical_id);
+  }
+
   return Response.json(updated);
 }
 
@@ -149,6 +161,7 @@ export async function DELETE(
   const { id } = await params;
 
   // Hard delete — clean up dependent records first
+  await db.delete(user_assignments).where(eq(user_assignments.variant_id, id));
   await db.delete(variant_versions).where(eq(variant_versions.variant_id, id));
   await db.delete(agent_changes).where(eq(agent_changes.variant_id, id));
 

@@ -22,6 +22,7 @@ export const verticals = pgTable('verticals', {
   source_file: text('source_file'), // GitHub file path, e.g. "app/(sidebar)/credits/page.tsx"
   status: text('status').notNull().default('active'), // active | paused | archived
   traffic_split_strategy: text('traffic_split_strategy').notNull().default('equal'), // equal | weighted | champion_challenger
+  config_version: integer('config_version').notNull().default(1),
   created_at: timestamp('created_at').defaultNow(),
 });
 

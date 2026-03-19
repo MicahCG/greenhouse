@@ -412,6 +412,29 @@ export function VerticalSection({
                 >
                   {showStats ? 'Hide Stats' : 'Performance Stats'}
                 </button>
+                <button
+                  onClick={async () => {
+                    setMenuOpen(false);
+                    if (!confirm('Reset all user assignments for this vertical? All users will be reassigned on their next visit.')) return;
+                    setLoading('reset');
+                    try {
+                      const res = await fetch(`/api/verticals/${vertical.id}/reset-assignments`, {
+                        method: 'POST',
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        alert(`Reset complete. ${data.data.deleted_assignments} assignments deleted.`);
+                        router.refresh();
+                      }
+                    } finally {
+                      setLoading(null);
+                    }
+                  }}
+                  disabled={loading === 'reset'}
+                  className="w-full text-left px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/5 transition-colors border-t border-white/5"
+                >
+                  Reset Assignments
+                </button>
                 {!isArchived && (
                   <button
                     onClick={archiveVertical}
