@@ -60,7 +60,29 @@ function getInitialConfig(variant?: ExistingVariant): Partial<VariantConfig> {
   };
 }
 
-export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceFile, sourceUrl, onSaved, onCancel }: VariantFormProps) {
+function normalizeSourceFilePath(value: string | null | undefined): string | null {
+  if (!value) return null;
+  // Strip full GitHub URL: https://github.com/owner/repo/tree/branch/path
+  try {
+    const url = new URL(value);
+    if (url.hostname === 'github.com') {
+      const parts = url.pathname.replace(/^\//, '').split('/');
+      if (parts.length > 4 && (parts[2] === 'tree' || parts[2] === 'blob')) {
+        let path = parts.slice(4).join('/');
+        const lastSeg = path.split('/').pop() ?? '';
+        if (!lastSeg.includes('.')) path = path.replace(/\/$/, '') + '/page.tsx';
+        return path;
+      }
+    }
+  } catch { /* not a URL */ }
+  let path = value.replace(/^\//, '');
+  const lastSeg = path.split('/').pop() ?? '';
+  if (!lastSeg.includes('.')) path = path.replace(/\/$/, '') + '/page.tsx';
+  return path;
+}
+
+export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceFile: rawSourceFile, sourceUrl, onSaved, onCancel }: VariantFormProps) {
+  const sourceFile = normalizeSourceFilePath(rawSourceFile);
   const initialType: VariantType = variant
     ? ((variant.variant_type as VariantType) ?? 'template')
     : (sourceFile ? 'fork' : 'external_url');

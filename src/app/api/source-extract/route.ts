@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { getFileContent } from '@/lib/github/client';
-import { resolveRepo, isRepoKey } from '@/lib/github/permissions';
+import { resolveRepo, isRepoKey, normalizeSourcePath } from '@/lib/github/permissions';
 import { extractSourceContent } from '@/lib/agent/source-extractor';
 
 export async function GET(request: Request) {
@@ -9,15 +9,17 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const repo = url.searchParams.get('repo') ?? 'popcorn';
-  const path = url.searchParams.get('path');
+  const rawPath = url.searchParams.get('path');
 
-  if (!path) {
+  if (!rawPath) {
     return Response.json({ error: 'path parameter is required' }, { status: 400 });
   }
 
   if (!isRepoKey(repo)) {
     return Response.json({ error: 'repo must be "greenhouse" or "popcorn"' }, { status: 400 });
   }
+
+  const path = normalizeSourcePath(rawPath);
 
   try {
     const repoFull = resolveRepo(repo);
