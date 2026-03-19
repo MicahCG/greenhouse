@@ -9,6 +9,7 @@ import { getFunnelData, getVerticalMetrics } from '@/lib/dashboard/queries';
 import { ProjectFunnelChart } from './project-charts';
 import { VerticalSection } from '@/components/dashboard/vertical-section';
 import { AddVerticalButton } from '@/components/dashboard/add-vertical-button';
+import { ProjectSettings } from '@/components/dashboard/project-settings';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -103,6 +104,12 @@ export default async function ProjectPage({ params }: PageProps) {
             </p>
           </div>
           <div className="flex-1" />
+          <ProjectSettings
+            projectId={project.id}
+            currentEvents={project.tracked_events ?? []}
+            currentDescription={project.description ?? ''}
+            currentThreshold={project.significance_threshold}
+          />
           <AddVerticalButton projectId={project.id} />
         </div>
       </div>
