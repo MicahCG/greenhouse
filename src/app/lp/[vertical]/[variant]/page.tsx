@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 import { db } from '@/lib/db';
 import { verticals, variants } from '@/lib/db/schema';
@@ -9,6 +10,7 @@ import { VariantConfigSchema } from '@/lib/types/variant-config';
 import { TrackingWrapper } from '@/components/landing-pages/tracking-wrapper';
 import { HeroCentered } from '@/components/landing-pages/templates/hero-centered';
 import { HeroSplit } from '@/components/landing-pages/templates/hero-split';
+import type { RoutingMethod } from '@/lib/traffic/ad-routing';
 
 interface PageProps {
   params: Promise<{ vertical: string; variant: string }>;
@@ -67,6 +69,10 @@ export default async function LandingPage({ params }: PageProps) {
   const vertical = data.vertical;
   const variant = data.variant;
 
+  // Read routing method set by middleware (ad_pinned | ab_assigned | direct)
+  const headersList = await headers();
+  const routingMethod = (headersList.get('x-gh-routing-method') ?? 'direct') as RoutingMethod;
+
   let TemplateComponent;
   switch (config.template) {
     case 'hero-split':
@@ -83,6 +89,7 @@ export default async function LandingPage({ params }: PageProps) {
       verticalId={vertical.id}
       variantId={variant.id}
       variantVersion={variant.version}
+      routingMethod={routingMethod}
     >
       <TemplateComponent config={config} />
     </TrackingWrapper>

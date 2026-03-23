@@ -67,6 +67,13 @@ async function getData(projectId: string) {
     })
   );
 
+  // Sort verticals by total visitors (highest first)
+  verticalsWithVariants.sort((a, b) => {
+    const totalA = Object.values(a.metricsMap).reduce((sum, m) => sum + (m.visitors ?? 0), 0);
+    const totalB = Object.values(b.metricsMap).reduce((sum, m) => sum + (m.visitors ?? 0), 0);
+    return totalB - totalA;
+  });
+
   const funnelData = await getFunnelData(projectId, 30);
 
   return { project, verticals: verticalsWithVariants, funnelData };

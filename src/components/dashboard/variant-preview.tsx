@@ -49,6 +49,7 @@ export function VariantPreview({ config }: VariantPreviewProps) {
           verticalId="preview"
           variantId="preview"
           variantVersion={1}
+          routingMethod="direct"
         >
           <Template config={safe} />
         </TrackingWrapper>

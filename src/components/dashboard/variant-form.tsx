@@ -122,6 +122,7 @@ export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceF
     .filter((t) => editedTexts[t.line] !== undefined && editedTexts[t.line] !== t.text)
     .map((t) => ({ find: t.text, replace: editedTexts[t.line] }));
   const [config, setConfig] = useState<Partial<VariantConfig>>(() => getInitialConfig(variant));
+  const [slug, setSlug] = useState(variant?.slug ?? '');
   const [externalUrl, setExternalUrl] = useState(variant?.external_url ?? (variant?.config as Record<string, unknown>)?.external_url as string ?? '');
   const [externalLabel, setExternalLabel] = useState((variant?.config as Record<string, unknown>)?.label as string ?? '');
   const [trafficWeight, setTrafficWeight] = useState(variant?.traffic_weight ?? 50);
@@ -209,6 +210,7 @@ export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceF
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              slug: slug !== variant.slug ? slug : undefined,
               external_url: externalUrl,
               label: externalLabel || undefined,
               traffic_weight: trafficSplitStrategy === 'weighted' ? trafficWeight : undefined,
@@ -250,6 +252,7 @@ export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceF
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              slug: slug !== variant.slug ? slug : undefined,
               config: fullConfig,
               traffic_weight: trafficSplitStrategy === 'weighted' ? trafficWeight : undefined,
               change_description: changeDescription || undefined,
@@ -409,6 +412,18 @@ export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceF
           ) : variantType === 'external_url' ? (
             /* External URL mode */
             <div className="space-y-4">
+              {variant && (
+                <div>
+                  <label className={labelClass}>Variant Name</label>
+                  <input
+                    type="text"
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value.replace(/[^a-z0-9-]/gi, '').toLowerCase())}
+                    placeholder="variant-a"
+                    className={inputClass}
+                  />
+                </div>
+              )}
               <div>
                 <label className={labelClass}>Target URL *</label>
                 <input
@@ -435,6 +450,19 @@ export function VariantForm({ verticalId, trafficSplitStrategy, variant, sourceF
           ) : (
             /* Template mode */
             <>
+              {variant && (
+                <div>
+                  <label className={labelClass}>Variant Name</label>
+                  <input
+                    type="text"
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value.replace(/[^a-z0-9-]/gi, '').toLowerCase())}
+                    placeholder="variant-a"
+                    className={inputClass}
+                  />
+                </div>
+              )}
+
               {/* Template selector */}
               <div>
                 <label className={labelClass}>Template</label>

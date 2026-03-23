@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { VariantModal } from '@/components/dashboard/modals/variant-modal';
@@ -110,6 +110,17 @@ export function VerticalSection({
   );
   const [weightsDirty, setWeightsDirty] = useState(false);
   const router = useRouter();
+
+  // Re-sync local state when server props change (e.g. after router.refresh())
+  useEffect(() => {
+    setVariantStatuses(Object.fromEntries(variants.map((v) => [v.id, v.status])));
+    if (!weightsDirty) {
+      setWeights(Object.fromEntries(variants.map((v) => [v.id, v.traffic_weight])));
+    }
+    setCurrentStrategy(vertical.traffic_split_strategy);
+    setVerticalName(vertical.name);
+    setVerticalStatus(vertical.status);
+  }, [variants, vertical]);
 
   const labels = FUNNEL_LABELS[funnelFocus] ?? FUNNEL_LABELS.acquisition;
 
@@ -746,6 +757,8 @@ export function VerticalSection({
       {/* Footer with totals */}
       <div className="px-5 py-3 bg-zinc-800/30 flex items-center justify-between">
         <div className="flex items-center gap-3 text-xs text-zinc-500">
+          <span>Last 30 days</span>
+          <span>·</span>
           <span>{liveVariants.length} active variant{liveVariants.length !== 1 ? 's' : ''}</span>
           {totalVisitors > 0 && (
             <>

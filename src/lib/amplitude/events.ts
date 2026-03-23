@@ -1,4 +1,5 @@
 import type { TrafficSource } from '@/lib/traffic/source-detection';
+import type { RoutingMethod } from '@/lib/traffic/ad-routing';
 
 export const LP_PAGE_VIEWED = 'lp_page_viewed';
 export const LP_CTA_CLICKED = 'lp_cta_clicked';
@@ -11,6 +12,7 @@ export interface LPPageViewedProperties {
   variant_id: string;
   variant_version: number;
   traffic_source: TrafficSource;
+  routing_method: RoutingMethod;
   utm_source: string;
   utm_medium: string;
   utm_campaign: string;

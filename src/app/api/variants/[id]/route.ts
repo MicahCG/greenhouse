@@ -7,6 +7,7 @@ import { VariantConfigSchema } from '@/lib/types/variant-config';
 import { incrementConfigVersion } from '@/lib/experiments/traffic';
 
 const PatchTemplateSchema = z.object({
+  slug: z.string().min(1).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with dashes').optional(),
   config: VariantConfigSchema.optional(),
   external_url: z.undefined().optional(),
   status: z.enum(['active', 'paused', 'winner', 'killed']).optional(),
@@ -16,6 +17,7 @@ const PatchTemplateSchema = z.object({
 });
 
 const PatchExternalSchema = z.object({
+  slug: z.string().min(1).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with dashes').optional(),
   external_url: z.string().url().optional(),
   label: z.string().optional(),
   status: z.enum(['active', 'paused', 'winner', 'killed']).optional(),
@@ -75,6 +77,8 @@ export async function PATCH(
     const updates: Partial<typeof variants.$inferInsert> = {};
     let newVersion = existing.version;
 
+    if (parsed.data.slug !== undefined) updates.slug = parsed.data.slug;
+
     // Update external URL or label
     if (parsed.data.external_url !== undefined || parsed.data.label !== undefined) {
       const currentConfig = existing.config as Record<string, unknown>;
@@ -120,6 +124,8 @@ export async function PATCH(
 
   const updates: Partial<typeof variants.$inferInsert> = {};
   let newVersion = existing.version;
+
+  if (parsed.data.slug !== undefined) updates.slug = parsed.data.slug;
 
   // If config is changing, save current to variant_versions and increment version
   if (parsed.data.config !== undefined) {

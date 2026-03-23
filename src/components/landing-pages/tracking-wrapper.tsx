@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, createContext, useContext } from 'react';
 import { init, track, setUserProperties, setUserPropertiesOnce } from '@/lib/amplitude/client';
 import { detectTrafficSource, parseUTMParams } from '@/lib/traffic/source-detection';
+import type { RoutingMethod } from '@/lib/traffic/ad-routing';
 import {
   LP_PAGE_VIEWED,
   LP_CTA_CLICKED,
@@ -31,6 +32,7 @@ interface TrackingWrapperProps {
   verticalId: string;
   variantId: string;
   variantVersion: number;
+  routingMethod: RoutingMethod;
   children: React.ReactNode;
 }
 
@@ -64,6 +66,7 @@ export function TrackingWrapper({
   verticalId,
   variantId,
   variantVersion,
+  routingMethod,
   children,
 }: TrackingWrapperProps) {
   const pageViewFiredRef = useRef(false);
@@ -124,12 +127,17 @@ export function TrackingWrapper({
       last_variant_id: variantId,
     });
 
+    // Set routing method as a user property for segmentation
+    setUserPropertiesOnce({ first_routing_method: routingMethod });
+    setUserProperties({ last_routing_method: routingMethod });
+
     const eventProps: LPPageViewedProperties = {
       project_id: projectId,
       vertical_id: verticalId,
       variant_id: variantId,
       variant_version: variantVersion,
       traffic_source: trafficSource,
+      routing_method: routingMethod,
       ...utmParams,
       device_type: deviceType,
       screen_width: screen,
@@ -140,7 +148,7 @@ export function TrackingWrapper({
     };
 
     track(LP_PAGE_VIEWED, eventProps as unknown as Record<string, unknown>);
-  }, [projectId, verticalId, variantId, variantVersion]);
+  }, [projectId, verticalId, variantId, variantVersion, routingMethod]);
 
   const trackCTAClick = useCallback(
     (
