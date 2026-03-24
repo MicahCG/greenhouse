@@ -274,13 +274,16 @@ export async function queryEventTotals(params: {
  * Returns step-by-step conversion counts and rates.
  */
 export async function queryFunnel(params: {
-  events: string[];
+  events: Array<string | { event_type: string; filters?: AmplitudeFilter[] }>;
   start: string;
   end: string;
   filters?: AmplitudeFilter[];
 }): Promise<FunnelResult> {
+  const eventNames = params.events.map((e) =>
+    typeof e === 'string' ? e : e.event_type
+  );
   const empty: FunnelResult = {
-    steps: params.events.map((event) => ({ event, count: 0, conversionRate: 0 })),
+    steps: eventNames.map((event) => ({ event, count: 0, conversionRate: 0 })),
   };
 
   if (!checkCredentials()) return empty;
@@ -288,7 +291,14 @@ export async function queryFunnel(params: {
 
   try {
     const queryParams: Record<string, string> = {
-      e: JSON.stringify(params.events.map((name) => ({ event_type: name }))),
+      e: JSON.stringify(
+        params.events.map((evt) => {
+          if (typeof evt === 'string') return { event_type: evt };
+          const def: Record<string, unknown> = { event_type: evt.event_type };
+          if (evt.filters?.length) def.filters = evt.filters;
+          return def;
+        })
+      ),
       start: params.start,
       end: params.end,
     };
@@ -309,7 +319,7 @@ export async function queryFunnel(params: {
     // Amplitude can return results as `events` or `steps` depending on version
     const stepData = raw.data.events ?? raw.data.steps ?? [];
 
-    const steps: FunnelStep[] = params.events.map((event, i) => {
+    const steps: FunnelStep[] = eventNames.map((event, i) => {
       const step = stepData[i];
       return {
         event,
